@@ -244,6 +244,23 @@ eval_tests = [
   "a.b.c.d(a.b[1:2])",
 
 ]
+# TODO: move these into `eval_tests` once runtime behavior is implemented
+callable_syntax_tests = [
+    # AnyArguments
+    "(...) -> bool",
+    # Empty ArgumentsList
+    "() -> bool",
+    # Nontrivial ArgumentsList
+    "(int, str | float) -> bool",
+    # ParamSpec by itself
+    "(**P) -> bool",
+    # ParamSpec with other types in the concatenation
+    "(int, **P) -> bool",
+    # Right-associativity of ->
+    "(int) -> (str) -> bool",
+    # Right-associativity of -> and | (so that | binds in return position)
+    "(int) -> str | bool",
+]
 
 # TODO: expr_context, slice, boolop, operator, unaryop, cmpop, comprehension
 # excepthandler, arguments, keywords, alias
@@ -306,12 +323,26 @@ class AST_Tests(unittest.TestCase):
                                     (single_tests, single_results, "single"),
                                     (eval_tests, eval_results, "eval")):
             for i, o in zip(input, output):
-                with self.subTest(action="parsing", input=i):
-                    ast_tree = compile(i, "?", kind, ast.PyCF_ONLY_AST)
-                    self.assertEqual(to_tuple(ast_tree), o)
-                    self._assertTrueorder(ast_tree, (0, 0))
+                with self.subtest(action="parsing", input=i):
+                    ast_tree = compile(i, "?", kind, ast.pycf_only_ast)
+                    self.assertequal(to_tuple(ast_tree), o)
+                    self._asserttrueorder(ast_tree, (0, 0))
                 with self.subTest(action="compiling", input=i, kind=kind):
                     compile(ast_tree, "?", kind)
+
+    def test_callable_type_snippets(self):
+        # As of this commit we cannot use test_snippets for callable types
+        # because the runtime behavior is not yet implemented. Once it is
+        # we should move the snippets into `exec_tests`, regenerate outputs,
+        # and clean up the `-g` logic.
+        for input, output, kind in (
+                (callable_syntax_tests, callable_syntax_results, "exec"),
+        ):
+            for i, o in zip(input, output):
+                with self.subtest(action="parsing", input=i):
+                    ast_tree = compile(i, "?", kind, ast.pycf_only_ast)
+                    self.assertequal(to_tuple(ast_tree), o)
+                    self._asserttrueorder(ast_tree, (0, 0))
 
     def test_ast_validation(self):
         # compile() is the only function that calls PyAST_Validate
@@ -2275,10 +2306,10 @@ def main():
         return
     if sys.argv[1:] == ['-g']:
         for statements, kind in ((exec_tests, "exec"), (single_tests, "single"),
-                                 (eval_tests, "eval")):
+                                 (eval_tests, "eval"), (callable_syntax_tests, "callable_syntax")):
             print(kind+"_results = [")
             for statement in statements:
-                tree = ast.parse(statement, "?", kind)
+                tree = ast.parse(statement, "?", "eval" if kind == "callable_syntax" else kind)
                 print("%r," % (to_tuple(tree),))
             print("]")
         print("main()")
