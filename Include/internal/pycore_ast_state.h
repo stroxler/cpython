@@ -168,6 +168,7 @@ struct ast_state {
     PyObject *bases;
     PyObject *body;
     PyObject *boolop_type;
+    PyObject *callable_type_arg_type;
     PyObject *callable_type_arguments_type;
     PyObject *cases;
     PyObject *cause;

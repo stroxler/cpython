@@ -117,8 +117,21 @@ module Python
            attributes (int lineno, int col_offset, int? end_lineno, int? end_col_offset)
 
     callable_type_arguments = AnyArguments
-                            | ArgumentsList(expr* posonlyargs)
-                            | Concatenation(expr* posonlyargs, expr param_spec)
+                            | ArgumentsList(expr* posonlyargs,
+                                            callable_type_arg* args,
+                                            callable_type_arg? vararg,
+                                            callable_type_arg* kwonlyargs,
+                                            callable_type_arg? kwarg,
+                                            expr* kw_defaults,
+                                            expr* defaults)
+                            | Concatenation(expr* posonlyargs,
+                                            callable_type_arg* args,
+                                            callable_type_arg* kwonlyargs,
+                                            expr* kw_defaults,
+                                            expr* defaults,
+                                            expr param_spec)
+
+    callable_type_arg = (identifier name, expr annotation)
 
     -- keyword arguments supplied to call (NULL identifier for **kwargs)
     keyword = (identifier? arg, expr value)

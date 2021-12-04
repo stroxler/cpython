@@ -182,6 +182,7 @@ void _PyAST_Fini(PyInterpreterState *interp)
     Py_CLEAR(state->bases);
     Py_CLEAR(state->body);
     Py_CLEAR(state->boolop_type);
+    Py_CLEAR(state->callable_type_arg_type);
     Py_CLEAR(state->callable_type_arguments_type);
     Py_CLEAR(state->cases);
     Py_CLEAR(state->cause);
@@ -374,6 +375,7 @@ GENERATE_ASDL_SEQ_CONSTRUCTOR(arguments, arguments_ty)
 GENERATE_ASDL_SEQ_CONSTRUCTOR(arg, arg_ty)
 GENERATE_ASDL_SEQ_CONSTRUCTOR(callable_type_arguments,
                               callable_type_arguments_ty)
+GENERATE_ASDL_SEQ_CONSTRUCTOR(callable_type_arg, callable_type_arg_ty)
 GENERATE_ASDL_SEQ_CONSTRUCTOR(keyword, keyword_ty)
 GENERATE_ASDL_SEQ_CONSTRUCTOR(alias, alias_ty)
 GENERATE_ASDL_SEQ_CONSTRUCTOR(withitem, withitem_ty)
@@ -694,10 +696,25 @@ static PyObject* ast2obj_callable_type_arguments(struct ast_state *state,
                                                  void*);
 static const char * const ArgumentsList_fields[]={
     "posonlyargs",
+    "args",
+    "vararg",
+    "kwonlyargs",
+    "kwarg",
+    "kw_defaults",
+    "defaults",
 };
 static const char * const Concatenation_fields[]={
     "posonlyargs",
+    "args",
+    "kwonlyargs",
+    "kw_defaults",
+    "defaults",
     "param_spec",
+};
+static PyObject* ast2obj_callable_type_arg(struct ast_state *state, void*);
+static const char * const callable_type_arg_fields[]={
+    "name",
+    "annotation",
 };
 static PyObject* ast2obj_keyword(struct ast_state *state, void*);
 static const char * const keyword_attributes[] = {
@@ -1775,8 +1792,8 @@ init_types(struct ast_state *state)
                                                     "callable_type_arguments",
                                                     state->AST_type, NULL, 0,
         "callable_type_arguments = AnyArguments\n"
-        "                        | ArgumentsList(expr* posonlyargs)\n"
-        "                        | Concatenation(expr* posonlyargs, expr param_spec)");
+        "                        | ArgumentsList(expr* posonlyargs, callable_type_arg* args, callable_type_arg? vararg, callable_type_arg* kwonlyargs, callable_type_arg? kwarg, expr* kw_defaults, expr* defaults)\n"
+        "                        | Concatenation(expr* posonlyargs, callable_type_arg* args, callable_type_arg* kwonlyargs, expr* kw_defaults, expr* defaults, expr param_spec)");
     if (!state->callable_type_arguments_type) return 0;
     if (!add_attributes(state, state->callable_type_arguments_type, NULL, 0))
         return 0;
@@ -1787,14 +1804,27 @@ init_types(struct ast_state *state)
     if (!state->AnyArguments_type) return 0;
     state->ArgumentsList_type = make_type(state, "ArgumentsList",
                                           state->callable_type_arguments_type,
-                                          ArgumentsList_fields, 1,
-        "ArgumentsList(expr* posonlyargs)");
+                                          ArgumentsList_fields, 7,
+        "ArgumentsList(expr* posonlyargs, callable_type_arg* args, callable_type_arg? vararg, callable_type_arg* kwonlyargs, callable_type_arg? kwarg, expr* kw_defaults, expr* defaults)");
     if (!state->ArgumentsList_type) return 0;
+    if (PyObject_SetAttr(state->ArgumentsList_type, state->vararg, Py_None) ==
+        -1)
+        return 0;
+    if (PyObject_SetAttr(state->ArgumentsList_type, state->kwarg, Py_None) ==
+        -1)
+        return 0;
     state->Concatenation_type = make_type(state, "Concatenation",
                                           state->callable_type_arguments_type,
-                                          Concatenation_fields, 2,
-        "Concatenation(expr* posonlyargs, expr param_spec)");
+                                          Concatenation_fields, 6,
+        "Concatenation(expr* posonlyargs, callable_type_arg* args, callable_type_arg* kwonlyargs, expr* kw_defaults, expr* defaults, expr param_spec)");
     if (!state->Concatenation_type) return 0;
+    state->callable_type_arg_type = make_type(state, "callable_type_arg",
+                                              state->AST_type,
+                                              callable_type_arg_fields, 2,
+        "callable_type_arg(identifier name, expr annotation)");
+    if (!state->callable_type_arg_type) return 0;
+    if (!add_attributes(state, state->callable_type_arg_type, NULL, 0)) return
+        0;
     state->keyword_type = make_type(state, "keyword", state->AST_type,
                                     keyword_fields, 2,
         "keyword(identifier? arg, expr value)");
@@ -1935,6 +1965,8 @@ static int obj2ast_arg(struct ast_state *state, PyObject* obj, arg_ty* out,
 static int obj2ast_callable_type_arguments(struct ast_state *state, PyObject*
                                            obj, callable_type_arguments_ty*
                                            out, PyArena* arena);
+static int obj2ast_callable_type_arg(struct ast_state *state, PyObject* obj,
+                                     callable_type_arg_ty* out, PyArena* arena);
 static int obj2ast_keyword(struct ast_state *state, PyObject* obj, keyword_ty*
                            out, PyArena* arena);
 static int obj2ast_alias(struct ast_state *state, PyObject* obj, alias_ty* out,
@@ -3446,7 +3478,11 @@ _PyAST_AnyArguments(PyArena *arena)
 }
 
 callable_type_arguments_ty
-_PyAST_ArgumentsList(asdl_expr_seq * posonlyargs, PyArena *arena)
+_PyAST_ArgumentsList(asdl_expr_seq * posonlyargs, asdl_callable_type_arg_seq *
+                     args, callable_type_arg_ty vararg,
+                     asdl_callable_type_arg_seq * kwonlyargs,
+                     callable_type_arg_ty kwarg, asdl_expr_seq * kw_defaults,
+                     asdl_expr_seq * defaults, PyArena *arena)
 {
     callable_type_arguments_ty p;
     p = (callable_type_arguments_ty)_PyArena_Malloc(arena, sizeof(*p));
@@ -3454,12 +3490,20 @@ _PyAST_ArgumentsList(asdl_expr_seq * posonlyargs, PyArena *arena)
         return NULL;
     p->kind = ArgumentsList_kind;
     p->v.ArgumentsList.posonlyargs = posonlyargs;
+    p->v.ArgumentsList.args = args;
+    p->v.ArgumentsList.vararg = vararg;
+    p->v.ArgumentsList.kwonlyargs = kwonlyargs;
+    p->v.ArgumentsList.kwarg = kwarg;
+    p->v.ArgumentsList.kw_defaults = kw_defaults;
+    p->v.ArgumentsList.defaults = defaults;
     return p;
 }
 
 callable_type_arguments_ty
-_PyAST_Concatenation(asdl_expr_seq * posonlyargs, expr_ty param_spec, PyArena
-                     *arena)
+_PyAST_Concatenation(asdl_expr_seq * posonlyargs, asdl_callable_type_arg_seq *
+                     args, asdl_callable_type_arg_seq * kwonlyargs,
+                     asdl_expr_seq * kw_defaults, asdl_expr_seq * defaults,
+                     expr_ty param_spec, PyArena *arena)
 {
     callable_type_arguments_ty p;
     if (!param_spec) {
@@ -3472,7 +3516,33 @@ _PyAST_Concatenation(asdl_expr_seq * posonlyargs, expr_ty param_spec, PyArena
         return NULL;
     p->kind = Concatenation_kind;
     p->v.Concatenation.posonlyargs = posonlyargs;
+    p->v.Concatenation.args = args;
+    p->v.Concatenation.kwonlyargs = kwonlyargs;
+    p->v.Concatenation.kw_defaults = kw_defaults;
+    p->v.Concatenation.defaults = defaults;
     p->v.Concatenation.param_spec = param_spec;
+    return p;
+}
+
+callable_type_arg_ty
+_PyAST_callable_type_arg(identifier name, expr_ty annotation, PyArena *arena)
+{
+    callable_type_arg_ty p;
+    if (!name) {
+        PyErr_SetString(PyExc_ValueError,
+                        "field 'name' is required for callable_type_arg");
+        return NULL;
+    }
+    if (!annotation) {
+        PyErr_SetString(PyExc_ValueError,
+                        "field 'annotation' is required for callable_type_arg");
+        return NULL;
+    }
+    p = (callable_type_arg_ty)_PyArena_Malloc(arena, sizeof(*p));
+    if (!p)
+        return NULL;
+    p->name = name;
+    p->annotation = annotation;
     return p;
 }
 
@@ -5201,6 +5271,40 @@ ast2obj_callable_type_arguments(struct ast_state *state, void* _o)
         if (PyObject_SetAttr(result, state->posonlyargs, value) == -1)
             goto failed;
         Py_DECREF(value);
+        value = ast2obj_list(state, (asdl_seq*)o->v.ArgumentsList.args,
+                             ast2obj_callable_type_arg);
+        if (!value) goto failed;
+        if (PyObject_SetAttr(result, state->args, value) == -1)
+            goto failed;
+        Py_DECREF(value);
+        value = ast2obj_callable_type_arg(state, o->v.ArgumentsList.vararg);
+        if (!value) goto failed;
+        if (PyObject_SetAttr(result, state->vararg, value) == -1)
+            goto failed;
+        Py_DECREF(value);
+        value = ast2obj_list(state, (asdl_seq*)o->v.ArgumentsList.kwonlyargs,
+                             ast2obj_callable_type_arg);
+        if (!value) goto failed;
+        if (PyObject_SetAttr(result, state->kwonlyargs, value) == -1)
+            goto failed;
+        Py_DECREF(value);
+        value = ast2obj_callable_type_arg(state, o->v.ArgumentsList.kwarg);
+        if (!value) goto failed;
+        if (PyObject_SetAttr(result, state->kwarg, value) == -1)
+            goto failed;
+        Py_DECREF(value);
+        value = ast2obj_list(state, (asdl_seq*)o->v.ArgumentsList.kw_defaults,
+                             ast2obj_expr);
+        if (!value) goto failed;
+        if (PyObject_SetAttr(result, state->kw_defaults, value) == -1)
+            goto failed;
+        Py_DECREF(value);
+        value = ast2obj_list(state, (asdl_seq*)o->v.ArgumentsList.defaults,
+                             ast2obj_expr);
+        if (!value) goto failed;
+        if (PyObject_SetAttr(result, state->defaults, value) == -1)
+            goto failed;
+        Py_DECREF(value);
         break;
     case Concatenation_kind:
         tp = (PyTypeObject *)state->Concatenation_type;
@@ -5212,6 +5316,30 @@ ast2obj_callable_type_arguments(struct ast_state *state, void* _o)
         if (PyObject_SetAttr(result, state->posonlyargs, value) == -1)
             goto failed;
         Py_DECREF(value);
+        value = ast2obj_list(state, (asdl_seq*)o->v.Concatenation.args,
+                             ast2obj_callable_type_arg);
+        if (!value) goto failed;
+        if (PyObject_SetAttr(result, state->args, value) == -1)
+            goto failed;
+        Py_DECREF(value);
+        value = ast2obj_list(state, (asdl_seq*)o->v.Concatenation.kwonlyargs,
+                             ast2obj_callable_type_arg);
+        if (!value) goto failed;
+        if (PyObject_SetAttr(result, state->kwonlyargs, value) == -1)
+            goto failed;
+        Py_DECREF(value);
+        value = ast2obj_list(state, (asdl_seq*)o->v.Concatenation.kw_defaults,
+                             ast2obj_expr);
+        if (!value) goto failed;
+        if (PyObject_SetAttr(result, state->kw_defaults, value) == -1)
+            goto failed;
+        Py_DECREF(value);
+        value = ast2obj_list(state, (asdl_seq*)o->v.Concatenation.defaults,
+                             ast2obj_expr);
+        if (!value) goto failed;
+        if (PyObject_SetAttr(result, state->defaults, value) == -1)
+            goto failed;
+        Py_DECREF(value);
         value = ast2obj_expr(state, o->v.Concatenation.param_spec);
         if (!value) goto failed;
         if (PyObject_SetAttr(result, state->param_spec, value) == -1)
@@ -5219,6 +5347,35 @@ ast2obj_callable_type_arguments(struct ast_state *state, void* _o)
         Py_DECREF(value);
         break;
     }
+    return result;
+failed:
+    Py_XDECREF(value);
+    Py_XDECREF(result);
+    return NULL;
+}
+
+PyObject*
+ast2obj_callable_type_arg(struct ast_state *state, void* _o)
+{
+    callable_type_arg_ty o = (callable_type_arg_ty)_o;
+    PyObject *result = NULL, *value = NULL;
+    PyTypeObject *tp;
+    if (!o) {
+        Py_RETURN_NONE;
+    }
+    tp = (PyTypeObject *)state->callable_type_arg_type;
+    result = PyType_GenericNew(tp, NULL, NULL);
+    if (!result) return NULL;
+    value = ast2obj_identifier(state, o->name);
+    if (!value) goto failed;
+    if (PyObject_SetAttr(result, state->name, value) == -1)
+        goto failed;
+    Py_DECREF(value);
+    value = ast2obj_expr(state, o->annotation);
+    if (!value) goto failed;
+    if (PyObject_SetAttr(result, state->annotation, value) == -1)
+        goto failed;
+    Py_DECREF(value);
     return result;
 failed:
     Py_XDECREF(value);
@@ -10941,6 +11098,12 @@ obj2ast_callable_type_arguments(struct ast_state *state, PyObject* obj,
     }
     if (isinstance) {
         asdl_expr_seq* posonlyargs;
+        asdl_callable_type_arg_seq* args;
+        callable_type_arg_ty vararg;
+        asdl_callable_type_arg_seq* kwonlyargs;
+        callable_type_arg_ty kwarg;
+        asdl_expr_seq* kw_defaults;
+        asdl_expr_seq* defaults;
 
         if (_PyObject_LookupAttr(obj, state->posonlyargs, &tmp) < 0) {
             return 1;
@@ -10979,7 +11142,190 @@ obj2ast_callable_type_arguments(struct ast_state *state, PyObject* obj,
             }
             Py_CLEAR(tmp);
         }
-        *out = _PyAST_ArgumentsList(posonlyargs, arena);
+        if (_PyObject_LookupAttr(obj, state->args, &tmp) < 0) {
+            return 1;
+        }
+        if (tmp == NULL) {
+            PyErr_SetString(PyExc_TypeError, "required field \"args\" missing from ArgumentsList");
+            return 1;
+        }
+        else {
+            int res;
+            Py_ssize_t len;
+            Py_ssize_t i;
+            if (!PyList_Check(tmp)) {
+                PyErr_Format(PyExc_TypeError, "ArgumentsList field \"args\" must be a list, not a %.200s", _PyType_Name(Py_TYPE(tmp)));
+                goto failed;
+            }
+            len = PyList_GET_SIZE(tmp);
+            args = _Py_asdl_callable_type_arg_seq_new(len, arena);
+            if (args == NULL) goto failed;
+            for (i = 0; i < len; i++) {
+                callable_type_arg_ty val;
+                PyObject *tmp2 = PyList_GET_ITEM(tmp, i);
+                Py_INCREF(tmp2);
+                if (Py_EnterRecursiveCall(" while traversing 'ArgumentsList' node")) {
+                    goto failed;
+                }
+                res = obj2ast_callable_type_arg(state, tmp2, &val, arena);
+                Py_LeaveRecursiveCall();
+                Py_DECREF(tmp2);
+                if (res != 0) goto failed;
+                if (len != PyList_GET_SIZE(tmp)) {
+                    PyErr_SetString(PyExc_RuntimeError, "ArgumentsList field \"args\" changed size during iteration");
+                    goto failed;
+                }
+                asdl_seq_SET(args, i, val);
+            }
+            Py_CLEAR(tmp);
+        }
+        if (_PyObject_LookupAttr(obj, state->vararg, &tmp) < 0) {
+            return 1;
+        }
+        if (tmp == NULL || tmp == Py_None) {
+            Py_CLEAR(tmp);
+            vararg = NULL;
+        }
+        else {
+            int res;
+            if (Py_EnterRecursiveCall(" while traversing 'ArgumentsList' node")) {
+                goto failed;
+            }
+            res = obj2ast_callable_type_arg(state, tmp, &vararg, arena);
+            Py_LeaveRecursiveCall();
+            if (res != 0) goto failed;
+            Py_CLEAR(tmp);
+        }
+        if (_PyObject_LookupAttr(obj, state->kwonlyargs, &tmp) < 0) {
+            return 1;
+        }
+        if (tmp == NULL) {
+            PyErr_SetString(PyExc_TypeError, "required field \"kwonlyargs\" missing from ArgumentsList");
+            return 1;
+        }
+        else {
+            int res;
+            Py_ssize_t len;
+            Py_ssize_t i;
+            if (!PyList_Check(tmp)) {
+                PyErr_Format(PyExc_TypeError, "ArgumentsList field \"kwonlyargs\" must be a list, not a %.200s", _PyType_Name(Py_TYPE(tmp)));
+                goto failed;
+            }
+            len = PyList_GET_SIZE(tmp);
+            kwonlyargs = _Py_asdl_callable_type_arg_seq_new(len, arena);
+            if (kwonlyargs == NULL) goto failed;
+            for (i = 0; i < len; i++) {
+                callable_type_arg_ty val;
+                PyObject *tmp2 = PyList_GET_ITEM(tmp, i);
+                Py_INCREF(tmp2);
+                if (Py_EnterRecursiveCall(" while traversing 'ArgumentsList' node")) {
+                    goto failed;
+                }
+                res = obj2ast_callable_type_arg(state, tmp2, &val, arena);
+                Py_LeaveRecursiveCall();
+                Py_DECREF(tmp2);
+                if (res != 0) goto failed;
+                if (len != PyList_GET_SIZE(tmp)) {
+                    PyErr_SetString(PyExc_RuntimeError, "ArgumentsList field \"kwonlyargs\" changed size during iteration");
+                    goto failed;
+                }
+                asdl_seq_SET(kwonlyargs, i, val);
+            }
+            Py_CLEAR(tmp);
+        }
+        if (_PyObject_LookupAttr(obj, state->kwarg, &tmp) < 0) {
+            return 1;
+        }
+        if (tmp == NULL || tmp == Py_None) {
+            Py_CLEAR(tmp);
+            kwarg = NULL;
+        }
+        else {
+            int res;
+            if (Py_EnterRecursiveCall(" while traversing 'ArgumentsList' node")) {
+                goto failed;
+            }
+            res = obj2ast_callable_type_arg(state, tmp, &kwarg, arena);
+            Py_LeaveRecursiveCall();
+            if (res != 0) goto failed;
+            Py_CLEAR(tmp);
+        }
+        if (_PyObject_LookupAttr(obj, state->kw_defaults, &tmp) < 0) {
+            return 1;
+        }
+        if (tmp == NULL) {
+            PyErr_SetString(PyExc_TypeError, "required field \"kw_defaults\" missing from ArgumentsList");
+            return 1;
+        }
+        else {
+            int res;
+            Py_ssize_t len;
+            Py_ssize_t i;
+            if (!PyList_Check(tmp)) {
+                PyErr_Format(PyExc_TypeError, "ArgumentsList field \"kw_defaults\" must be a list, not a %.200s", _PyType_Name(Py_TYPE(tmp)));
+                goto failed;
+            }
+            len = PyList_GET_SIZE(tmp);
+            kw_defaults = _Py_asdl_expr_seq_new(len, arena);
+            if (kw_defaults == NULL) goto failed;
+            for (i = 0; i < len; i++) {
+                expr_ty val;
+                PyObject *tmp2 = PyList_GET_ITEM(tmp, i);
+                Py_INCREF(tmp2);
+                if (Py_EnterRecursiveCall(" while traversing 'ArgumentsList' node")) {
+                    goto failed;
+                }
+                res = obj2ast_expr(state, tmp2, &val, arena);
+                Py_LeaveRecursiveCall();
+                Py_DECREF(tmp2);
+                if (res != 0) goto failed;
+                if (len != PyList_GET_SIZE(tmp)) {
+                    PyErr_SetString(PyExc_RuntimeError, "ArgumentsList field \"kw_defaults\" changed size during iteration");
+                    goto failed;
+                }
+                asdl_seq_SET(kw_defaults, i, val);
+            }
+            Py_CLEAR(tmp);
+        }
+        if (_PyObject_LookupAttr(obj, state->defaults, &tmp) < 0) {
+            return 1;
+        }
+        if (tmp == NULL) {
+            PyErr_SetString(PyExc_TypeError, "required field \"defaults\" missing from ArgumentsList");
+            return 1;
+        }
+        else {
+            int res;
+            Py_ssize_t len;
+            Py_ssize_t i;
+            if (!PyList_Check(tmp)) {
+                PyErr_Format(PyExc_TypeError, "ArgumentsList field \"defaults\" must be a list, not a %.200s", _PyType_Name(Py_TYPE(tmp)));
+                goto failed;
+            }
+            len = PyList_GET_SIZE(tmp);
+            defaults = _Py_asdl_expr_seq_new(len, arena);
+            if (defaults == NULL) goto failed;
+            for (i = 0; i < len; i++) {
+                expr_ty val;
+                PyObject *tmp2 = PyList_GET_ITEM(tmp, i);
+                Py_INCREF(tmp2);
+                if (Py_EnterRecursiveCall(" while traversing 'ArgumentsList' node")) {
+                    goto failed;
+                }
+                res = obj2ast_expr(state, tmp2, &val, arena);
+                Py_LeaveRecursiveCall();
+                Py_DECREF(tmp2);
+                if (res != 0) goto failed;
+                if (len != PyList_GET_SIZE(tmp)) {
+                    PyErr_SetString(PyExc_RuntimeError, "ArgumentsList field \"defaults\" changed size during iteration");
+                    goto failed;
+                }
+                asdl_seq_SET(defaults, i, val);
+            }
+            Py_CLEAR(tmp);
+        }
+        *out = _PyAST_ArgumentsList(posonlyargs, args, vararg, kwonlyargs,
+                                    kwarg, kw_defaults, defaults, arena);
         if (*out == NULL) goto failed;
         return 0;
     }
@@ -10990,6 +11336,10 @@ obj2ast_callable_type_arguments(struct ast_state *state, PyObject* obj,
     }
     if (isinstance) {
         asdl_expr_seq* posonlyargs;
+        asdl_callable_type_arg_seq* args;
+        asdl_callable_type_arg_seq* kwonlyargs;
+        asdl_expr_seq* kw_defaults;
+        asdl_expr_seq* defaults;
         expr_ty param_spec;
 
         if (_PyObject_LookupAttr(obj, state->posonlyargs, &tmp) < 0) {
@@ -11029,6 +11379,154 @@ obj2ast_callable_type_arguments(struct ast_state *state, PyObject* obj,
             }
             Py_CLEAR(tmp);
         }
+        if (_PyObject_LookupAttr(obj, state->args, &tmp) < 0) {
+            return 1;
+        }
+        if (tmp == NULL) {
+            PyErr_SetString(PyExc_TypeError, "required field \"args\" missing from Concatenation");
+            return 1;
+        }
+        else {
+            int res;
+            Py_ssize_t len;
+            Py_ssize_t i;
+            if (!PyList_Check(tmp)) {
+                PyErr_Format(PyExc_TypeError, "Concatenation field \"args\" must be a list, not a %.200s", _PyType_Name(Py_TYPE(tmp)));
+                goto failed;
+            }
+            len = PyList_GET_SIZE(tmp);
+            args = _Py_asdl_callable_type_arg_seq_new(len, arena);
+            if (args == NULL) goto failed;
+            for (i = 0; i < len; i++) {
+                callable_type_arg_ty val;
+                PyObject *tmp2 = PyList_GET_ITEM(tmp, i);
+                Py_INCREF(tmp2);
+                if (Py_EnterRecursiveCall(" while traversing 'Concatenation' node")) {
+                    goto failed;
+                }
+                res = obj2ast_callable_type_arg(state, tmp2, &val, arena);
+                Py_LeaveRecursiveCall();
+                Py_DECREF(tmp2);
+                if (res != 0) goto failed;
+                if (len != PyList_GET_SIZE(tmp)) {
+                    PyErr_SetString(PyExc_RuntimeError, "Concatenation field \"args\" changed size during iteration");
+                    goto failed;
+                }
+                asdl_seq_SET(args, i, val);
+            }
+            Py_CLEAR(tmp);
+        }
+        if (_PyObject_LookupAttr(obj, state->kwonlyargs, &tmp) < 0) {
+            return 1;
+        }
+        if (tmp == NULL) {
+            PyErr_SetString(PyExc_TypeError, "required field \"kwonlyargs\" missing from Concatenation");
+            return 1;
+        }
+        else {
+            int res;
+            Py_ssize_t len;
+            Py_ssize_t i;
+            if (!PyList_Check(tmp)) {
+                PyErr_Format(PyExc_TypeError, "Concatenation field \"kwonlyargs\" must be a list, not a %.200s", _PyType_Name(Py_TYPE(tmp)));
+                goto failed;
+            }
+            len = PyList_GET_SIZE(tmp);
+            kwonlyargs = _Py_asdl_callable_type_arg_seq_new(len, arena);
+            if (kwonlyargs == NULL) goto failed;
+            for (i = 0; i < len; i++) {
+                callable_type_arg_ty val;
+                PyObject *tmp2 = PyList_GET_ITEM(tmp, i);
+                Py_INCREF(tmp2);
+                if (Py_EnterRecursiveCall(" while traversing 'Concatenation' node")) {
+                    goto failed;
+                }
+                res = obj2ast_callable_type_arg(state, tmp2, &val, arena);
+                Py_LeaveRecursiveCall();
+                Py_DECREF(tmp2);
+                if (res != 0) goto failed;
+                if (len != PyList_GET_SIZE(tmp)) {
+                    PyErr_SetString(PyExc_RuntimeError, "Concatenation field \"kwonlyargs\" changed size during iteration");
+                    goto failed;
+                }
+                asdl_seq_SET(kwonlyargs, i, val);
+            }
+            Py_CLEAR(tmp);
+        }
+        if (_PyObject_LookupAttr(obj, state->kw_defaults, &tmp) < 0) {
+            return 1;
+        }
+        if (tmp == NULL) {
+            PyErr_SetString(PyExc_TypeError, "required field \"kw_defaults\" missing from Concatenation");
+            return 1;
+        }
+        else {
+            int res;
+            Py_ssize_t len;
+            Py_ssize_t i;
+            if (!PyList_Check(tmp)) {
+                PyErr_Format(PyExc_TypeError, "Concatenation field \"kw_defaults\" must be a list, not a %.200s", _PyType_Name(Py_TYPE(tmp)));
+                goto failed;
+            }
+            len = PyList_GET_SIZE(tmp);
+            kw_defaults = _Py_asdl_expr_seq_new(len, arena);
+            if (kw_defaults == NULL) goto failed;
+            for (i = 0; i < len; i++) {
+                expr_ty val;
+                PyObject *tmp2 = PyList_GET_ITEM(tmp, i);
+                Py_INCREF(tmp2);
+                if (Py_EnterRecursiveCall(" while traversing 'Concatenation' node")) {
+                    goto failed;
+                }
+                res = obj2ast_expr(state, tmp2, &val, arena);
+                Py_LeaveRecursiveCall();
+                Py_DECREF(tmp2);
+                if (res != 0) goto failed;
+                if (len != PyList_GET_SIZE(tmp)) {
+                    PyErr_SetString(PyExc_RuntimeError, "Concatenation field \"kw_defaults\" changed size during iteration");
+                    goto failed;
+                }
+                asdl_seq_SET(kw_defaults, i, val);
+            }
+            Py_CLEAR(tmp);
+        }
+        if (_PyObject_LookupAttr(obj, state->defaults, &tmp) < 0) {
+            return 1;
+        }
+        if (tmp == NULL) {
+            PyErr_SetString(PyExc_TypeError, "required field \"defaults\" missing from Concatenation");
+            return 1;
+        }
+        else {
+            int res;
+            Py_ssize_t len;
+            Py_ssize_t i;
+            if (!PyList_Check(tmp)) {
+                PyErr_Format(PyExc_TypeError, "Concatenation field \"defaults\" must be a list, not a %.200s", _PyType_Name(Py_TYPE(tmp)));
+                goto failed;
+            }
+            len = PyList_GET_SIZE(tmp);
+            defaults = _Py_asdl_expr_seq_new(len, arena);
+            if (defaults == NULL) goto failed;
+            for (i = 0; i < len; i++) {
+                expr_ty val;
+                PyObject *tmp2 = PyList_GET_ITEM(tmp, i);
+                Py_INCREF(tmp2);
+                if (Py_EnterRecursiveCall(" while traversing 'Concatenation' node")) {
+                    goto failed;
+                }
+                res = obj2ast_expr(state, tmp2, &val, arena);
+                Py_LeaveRecursiveCall();
+                Py_DECREF(tmp2);
+                if (res != 0) goto failed;
+                if (len != PyList_GET_SIZE(tmp)) {
+                    PyErr_SetString(PyExc_RuntimeError, "Concatenation field \"defaults\" changed size during iteration");
+                    goto failed;
+                }
+                asdl_seq_SET(defaults, i, val);
+            }
+            Py_CLEAR(tmp);
+        }
         if (_PyObject_LookupAttr(obj, state->param_spec, &tmp) < 0) {
             return 1;
         }
@@ -11046,13 +11544,63 @@ obj2ast_callable_type_arguments(struct ast_state *state, PyObject* obj,
             if (res != 0) goto failed;
             Py_CLEAR(tmp);
         }
-        *out = _PyAST_Concatenation(posonlyargs, param_spec, arena);
+        *out = _PyAST_Concatenation(posonlyargs, args, kwonlyargs, kw_defaults,
+                                    defaults, param_spec, arena);
         if (*out == NULL) goto failed;
         return 0;
     }
 
     PyErr_Format(PyExc_TypeError, "expected some sort of callable_type_arguments, but got %R", obj);
     failed:
+    Py_XDECREF(tmp);
+    return 1;
+}
+
+int
+obj2ast_callable_type_arg(struct ast_state *state, PyObject* obj,
+                          callable_type_arg_ty* out, PyArena* arena)
+{
+    PyObject* tmp = NULL;
+    identifier name;
+    expr_ty annotation;
+
+    if (_PyObject_LookupAttr(obj, state->name, &tmp) < 0) {
+        return 1;
+    }
+    if (tmp == NULL) {
+        PyErr_SetString(PyExc_TypeError, "required field \"name\" missing from callable_type_arg");
+        return 1;
+    }
+    else {
+        int res;
+        if (Py_EnterRecursiveCall(" while traversing 'callable_type_arg' node")) {
+            goto failed;
+        }
+        res = obj2ast_identifier(state, tmp, &name, arena);
+        Py_LeaveRecursiveCall();
+        if (res != 0) goto failed;
+        Py_CLEAR(tmp);
+    }
+    if (_PyObject_LookupAttr(obj, state->annotation, &tmp) < 0) {
+        return 1;
+    }
+    if (tmp == NULL) {
+        PyErr_SetString(PyExc_TypeError, "required field \"annotation\" missing from callable_type_arg");
+        return 1;
+    }
+    else {
+        int res;
+        if (Py_EnterRecursiveCall(" while traversing 'callable_type_arg' node")) {
+            goto failed;
+        }
+        res = obj2ast_expr(state, tmp, &annotation, arena);
+        Py_LeaveRecursiveCall();
+        if (res != 0) goto failed;
+        Py_CLEAR(tmp);
+    }
+    *out = _PyAST_callable_type_arg(name, annotation, arena);
+    return 0;
+failed:
     Py_XDECREF(tmp);
     return 1;
 }
@@ -12441,6 +12989,10 @@ astmodule_exec(PyObject *m)
     }
     if (PyModule_AddObjectRef(m, "Concatenation", state->Concatenation_type) <
         0) {
+        return -1;
+    }
+    if (PyModule_AddObjectRef(m, "callable_type_arg",
+        state->callable_type_arg_type) < 0) {
         return -1;
     }
     if (PyModule_AddObjectRef(m, "keyword", state->keyword_type) < 0) {

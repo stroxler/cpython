@@ -41,6 +41,8 @@ typedef struct _arg *arg_ty;
 
 typedef struct _callable_type_arguments *callable_type_arguments_ty;
 
+typedef struct _callable_type_arg *callable_type_arg_ty;
+
 typedef struct _keyword *keyword_ty;
 
 typedef struct _alias *alias_ty;
@@ -112,6 +114,14 @@ typedef struct {
 
 asdl_callable_type_arguments_seq
 *_Py_asdl_callable_type_arguments_seq_new(Py_ssize_t size, PyArena *arena);
+
+typedef struct {
+    _ASDL_SEQ_HEAD
+    callable_type_arg_ty typed_elements[1];
+} asdl_callable_type_arg_seq;
+
+asdl_callable_type_arg_seq *_Py_asdl_callable_type_arg_seq_new(Py_ssize_t size,
+                                                               PyArena *arena);
 
 typedef struct {
     _ASDL_SEQ_HEAD
@@ -558,14 +568,29 @@ struct _callable_type_arguments {
     union {
         struct {
             asdl_expr_seq *posonlyargs;
+            asdl_callable_type_arg_seq *args;
+            callable_type_arg_ty vararg;
+            asdl_callable_type_arg_seq *kwonlyargs;
+            callable_type_arg_ty kwarg;
+            asdl_expr_seq *kw_defaults;
+            asdl_expr_seq *defaults;
         } ArgumentsList;
 
         struct {
             asdl_expr_seq *posonlyargs;
+            asdl_callable_type_arg_seq *args;
+            asdl_callable_type_arg_seq *kwonlyargs;
+            asdl_expr_seq *kw_defaults;
+            asdl_expr_seq *defaults;
             expr_ty param_spec;
         } Concatenation;
 
     } v;
+};
+
+struct _callable_type_arg {
+    identifier name;
+    expr_ty annotation;
 };
 
 struct _keyword {
@@ -845,10 +870,25 @@ arg_ty _PyAST_arg(identifier arg, expr_ty annotation, string type_comment, int
                   PyArena *arena);
 callable_type_arguments_ty _PyAST_AnyArguments(PyArena *arena);
 callable_type_arguments_ty _PyAST_ArgumentsList(asdl_expr_seq * posonlyargs,
+                                                asdl_callable_type_arg_seq *
+                                                args, callable_type_arg_ty
+                                                vararg,
+                                                asdl_callable_type_arg_seq *
+                                                kwonlyargs,
+                                                callable_type_arg_ty kwarg,
+                                                asdl_expr_seq * kw_defaults,
+                                                asdl_expr_seq * defaults,
                                                 PyArena *arena);
 callable_type_arguments_ty _PyAST_Concatenation(asdl_expr_seq * posonlyargs,
-                                                expr_ty param_spec, PyArena
-                                                *arena);
+                                                asdl_callable_type_arg_seq *
+                                                args,
+                                                asdl_callable_type_arg_seq *
+                                                kwonlyargs, asdl_expr_seq *
+                                                kw_defaults, asdl_expr_seq *
+                                                defaults, expr_ty param_spec,
+                                                PyArena *arena);
+callable_type_arg_ty _PyAST_callable_type_arg(identifier name, expr_ty
+                                              annotation, PyArena *arena);
 keyword_ty _PyAST_keyword(identifier arg, expr_ty value, int lineno, int
                           col_offset, int end_lineno, int end_col_offset,
                           PyArena *arena);
