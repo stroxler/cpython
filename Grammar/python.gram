@@ -620,6 +620,7 @@ expression[expr_ty] (memo):
     | invalid_expression
     | invalid_legacy_expression
     | a=disjunction 'if' b=disjunction 'else' c=expression { _PyAST_IfExp(b, a, c, EXTRA) }
+    | callable_type_expression
     | disjunction
     | lambdef
 
@@ -848,6 +849,30 @@ lambda_param_maybe_default[NameDefaultPair*]:
     | a=lambda_param c=default? ',' { _PyPegen_name_default_pair(p, a, c, NULL) }
     | a=lambda_param c=default? &':' { _PyPegen_name_default_pair(p, a, c, NULL) }
 lambda_param[arg_ty]: a=NAME { _PyAST_arg(a->v.Name.id, NULL, NULL, EXTRA) }
+
+# Callable type expressions
+# -------------------------
+
+callable_type_expression:
+    | a=callable_type_arguments '->' r=expression {
+      _PyAST_CallableType(a, r, EXTRA) }
+    | ASYNC a=callable_type_arguments '->' r=expression {
+       _PyAST_AsyncCallableType(a, r, EXTRA) }
+
+callable_type_arguments:
+    | '(' '...' ')' { _PyAST_AnyArguments(p->arena) }
+    | '(' a[asdl_expr_seq*]=callable_type_positional_argument*  ')' {
+        _PyAST_ArgumentsList(a, p->arena) }
+    | '(' a[asdl_expr_seq*]=callable_type_positional_argument* ps=callable_type_param_spec ')' {
+        _PyAST_Concatenation(a, ps, p->arena) }
+
+callable_type_positional_argument:
+    | e=expression ',' { e }
+    | e=expression &')' { e }
+
+callable_type_param_spec:
+    | '**' e=expression ',' { e }
+    | '**' e=expression &')' { e }
 
 # LITERALS
 # ========
