@@ -32,8 +32,11 @@ void _PyAST_Fini(PyInterpreterState *interp)
     Py_CLEAR(state->And_singleton);
     Py_CLEAR(state->And_type);
     Py_CLEAR(state->AnnAssign_type);
+    Py_CLEAR(state->AnyArguments_type);
+    Py_CLEAR(state->ArgumentsList_type);
     Py_CLEAR(state->Assert_type);
     Py_CLEAR(state->Assign_type);
+    Py_CLEAR(state->AsyncCallableType_type);
     Py_CLEAR(state->AsyncFor_type);
     Py_CLEAR(state->AsyncFunctionDef_type);
     Py_CLEAR(state->AsyncWith_type);
@@ -50,8 +53,10 @@ void _PyAST_Fini(PyInterpreterState *interp)
     Py_CLEAR(state->BoolOp_type);
     Py_CLEAR(state->Break_type);
     Py_CLEAR(state->Call_type);
+    Py_CLEAR(state->CallableType_type);
     Py_CLEAR(state->ClassDef_type);
     Py_CLEAR(state->Compare_type);
+    Py_CLEAR(state->Concatenation_type);
     Py_CLEAR(state->Constant_type);
     Py_CLEAR(state->Continue_type);
     Py_CLEAR(state->Del_singleton);
@@ -177,6 +182,7 @@ void _PyAST_Fini(PyInterpreterState *interp)
     Py_CLEAR(state->bases);
     Py_CLEAR(state->body);
     Py_CLEAR(state->boolop_type);
+    Py_CLEAR(state->callable_type_arguments_type);
     Py_CLEAR(state->cases);
     Py_CLEAR(state->cause);
     Py_CLEAR(state->cls);
@@ -234,6 +240,7 @@ void _PyAST_Fini(PyInterpreterState *interp)
     Py_CLEAR(state->ops);
     Py_CLEAR(state->optional_vars);
     Py_CLEAR(state->orelse);
+    Py_CLEAR(state->param_spec);
     Py_CLEAR(state->pattern);
     Py_CLEAR(state->pattern_type);
     Py_CLEAR(state->patterns);
@@ -333,6 +340,7 @@ static int init_identifiers(struct ast_state *state)
     if ((state->ops = PyUnicode_InternFromString("ops")) == NULL) return 0;
     if ((state->optional_vars = PyUnicode_InternFromString("optional_vars")) == NULL) return 0;
     if ((state->orelse = PyUnicode_InternFromString("orelse")) == NULL) return 0;
+    if ((state->param_spec = PyUnicode_InternFromString("param_spec")) == NULL) return 0;
     if ((state->pattern = PyUnicode_InternFromString("pattern")) == NULL) return 0;
     if ((state->patterns = PyUnicode_InternFromString("patterns")) == NULL) return 0;
     if ((state->posonlyargs = PyUnicode_InternFromString("posonlyargs")) == NULL) return 0;
@@ -364,6 +372,8 @@ GENERATE_ASDL_SEQ_CONSTRUCTOR(comprehension, comprehension_ty)
 GENERATE_ASDL_SEQ_CONSTRUCTOR(excepthandler, excepthandler_ty)
 GENERATE_ASDL_SEQ_CONSTRUCTOR(arguments, arguments_ty)
 GENERATE_ASDL_SEQ_CONSTRUCTOR(arg, arg_ty)
+GENERATE_ASDL_SEQ_CONSTRUCTOR(callable_type_arguments,
+                              callable_type_arguments_ty)
 GENERATE_ASDL_SEQ_CONSTRUCTOR(keyword, keyword_ty)
 GENERATE_ASDL_SEQ_CONSTRUCTOR(alias, alias_ty)
 GENERATE_ASDL_SEQ_CONSTRUCTOR(withitem, withitem_ty)
@@ -595,6 +605,14 @@ static const char * const Constant_fields[]={
     "value",
     "kind",
 };
+static const char * const AsyncCallableType_fields[]={
+    "args",
+    "returns",
+};
+static const char * const CallableType_fields[]={
+    "args",
+    "returns",
+};
 static const char * const Attribute_fields[]={
     "value",
     "attr",
@@ -671,6 +689,15 @@ static const char * const arg_fields[]={
     "arg",
     "annotation",
     "type_comment",
+};
+static PyObject* ast2obj_callable_type_arguments(struct ast_state *state,
+                                                 void*);
+static const char * const ArgumentsList_fields[]={
+    "posonlyargs",
+};
+static const char * const Concatenation_fields[]={
+    "posonlyargs",
+    "param_spec",
 };
 static PyObject* ast2obj_keyword(struct ast_state *state, void*);
 static const char * const keyword_attributes[] = {
@@ -1315,6 +1342,8 @@ init_types(struct ast_state *state)
         "     | FormattedValue(expr value, int? conversion, expr? format_spec)\n"
         "     | JoinedStr(expr* values)\n"
         "     | Constant(constant value, string? kind)\n"
+        "     | AsyncCallableType(callable_type_arguments args, expr returns)\n"
+        "     | CallableType(callable_type_arguments args, expr returns)\n"
         "     | Attribute(expr value, identifier attr, expr_context ctx)\n"
         "     | Subscript(expr value, expr slice, expr_context ctx)\n"
         "     | Starred(expr value, expr_context ctx)\n"
@@ -1420,6 +1449,16 @@ init_types(struct ast_state *state)
     if (!state->Constant_type) return 0;
     if (PyObject_SetAttr(state->Constant_type, state->kind, Py_None) == -1)
         return 0;
+    state->AsyncCallableType_type = make_type(state, "AsyncCallableType",
+                                              state->expr_type,
+                                              AsyncCallableType_fields, 2,
+        "AsyncCallableType(callable_type_arguments args, expr returns)");
+    if (!state->AsyncCallableType_type) return 0;
+    state->CallableType_type = make_type(state, "CallableType",
+                                         state->expr_type, CallableType_fields,
+                                         2,
+        "CallableType(callable_type_arguments args, expr returns)");
+    if (!state->CallableType_type) return 0;
     state->Attribute_type = make_type(state, "Attribute", state->expr_type,
                                       Attribute_fields, 3,
         "Attribute(expr value, identifier attr, expr_context ctx)");
@@ -1732,6 +1771,30 @@ init_types(struct ast_state *state)
         return 0;
     if (PyObject_SetAttr(state->arg_type, state->end_col_offset, Py_None) == -1)
         return 0;
+    state->callable_type_arguments_type = make_type(state,
+                                                    "callable_type_arguments",
+                                                    state->AST_type, NULL, 0,
+        "callable_type_arguments = AnyArguments\n"
+        "                        | ArgumentsList(expr* posonlyargs)\n"
+        "                        | Concatenation(expr* posonlyargs, expr param_spec)");
+    if (!state->callable_type_arguments_type) return 0;
+    if (!add_attributes(state, state->callable_type_arguments_type, NULL, 0))
+        return 0;
+    state->AnyArguments_type = make_type(state, "AnyArguments",
+                                         state->callable_type_arguments_type,
+                                         NULL, 0,
+        "AnyArguments");
+    if (!state->AnyArguments_type) return 0;
+    state->ArgumentsList_type = make_type(state, "ArgumentsList",
+                                          state->callable_type_arguments_type,
+                                          ArgumentsList_fields, 1,
+        "ArgumentsList(expr* posonlyargs)");
+    if (!state->ArgumentsList_type) return 0;
+    state->Concatenation_type = make_type(state, "Concatenation",
+                                          state->callable_type_arguments_type,
+                                          Concatenation_fields, 2,
+        "Concatenation(expr* posonlyargs, expr param_spec)");
+    if (!state->Concatenation_type) return 0;
     state->keyword_type = make_type(state, "keyword", state->AST_type,
                                     keyword_fields, 2,
         "keyword(identifier? arg, expr value)");
@@ -1869,6 +1932,9 @@ static int obj2ast_arguments(struct ast_state *state, PyObject* obj,
                              arguments_ty* out, PyArena* arena);
 static int obj2ast_arg(struct ast_state *state, PyObject* obj, arg_ty* out,
                        PyArena* arena);
+static int obj2ast_callable_type_arguments(struct ast_state *state, PyObject*
+                                           obj, callable_type_arguments_ty*
+                                           out, PyArena* arena);
 static int obj2ast_keyword(struct ast_state *state, PyObject* obj, keyword_ty*
                            out, PyArena* arena);
 static int obj2ast_alias(struct ast_state *state, PyObject* obj, alias_ty* out,
@@ -3032,6 +3098,64 @@ _PyAST_Constant(constant value, string kind, int lineno, int col_offset, int
 }
 
 expr_ty
+_PyAST_AsyncCallableType(callable_type_arguments_ty args, expr_ty returns, int
+                         lineno, int col_offset, int end_lineno, int
+                         end_col_offset, PyArena *arena)
+{
+    expr_ty p;
+    if (!args) {
+        PyErr_SetString(PyExc_ValueError,
+                        "field 'args' is required for AsyncCallableType");
+        return NULL;
+    }
+    if (!returns) {
+        PyErr_SetString(PyExc_ValueError,
+                        "field 'returns' is required for AsyncCallableType");
+        return NULL;
+    }
+    p = (expr_ty)_PyArena_Malloc(arena, sizeof(*p));
+    if (!p)
+        return NULL;
+    p->kind = AsyncCallableType_kind;
+    p->v.AsyncCallableType.args = args;
+    p->v.AsyncCallableType.returns = returns;
+    p->lineno = lineno;
+    p->col_offset = col_offset;
+    p->end_lineno = end_lineno;
+    p->end_col_offset = end_col_offset;
+    return p;
+}
+
+expr_ty
+_PyAST_CallableType(callable_type_arguments_ty args, expr_ty returns, int
+                    lineno, int col_offset, int end_lineno, int end_col_offset,
+                    PyArena *arena)
+{
+    expr_ty p;
+    if (!args) {
+        PyErr_SetString(PyExc_ValueError,
+                        "field 'args' is required for CallableType");
+        return NULL;
+    }
+    if (!returns) {
+        PyErr_SetString(PyExc_ValueError,
+                        "field 'returns' is required for CallableType");
+        return NULL;
+    }
+    p = (expr_ty)_PyArena_Malloc(arena, sizeof(*p));
+    if (!p)
+        return NULL;
+    p->kind = CallableType_kind;
+    p->v.CallableType.args = args;
+    p->v.CallableType.returns = returns;
+    p->lineno = lineno;
+    p->col_offset = col_offset;
+    p->end_lineno = end_lineno;
+    p->end_col_offset = end_col_offset;
+    return p;
+}
+
+expr_ty
 _PyAST_Attribute(expr_ty value, identifier attr, expr_context_ty ctx, int
                  lineno, int col_offset, int end_lineno, int end_col_offset,
                  PyArena *arena)
@@ -3307,6 +3431,48 @@ _PyAST_arg(identifier arg, expr_ty annotation, string type_comment, int lineno,
     p->col_offset = col_offset;
     p->end_lineno = end_lineno;
     p->end_col_offset = end_col_offset;
+    return p;
+}
+
+callable_type_arguments_ty
+_PyAST_AnyArguments(PyArena *arena)
+{
+    callable_type_arguments_ty p;
+    p = (callable_type_arguments_ty)_PyArena_Malloc(arena, sizeof(*p));
+    if (!p)
+        return NULL;
+    p->kind = AnyArguments_kind;
+    return p;
+}
+
+callable_type_arguments_ty
+_PyAST_ArgumentsList(asdl_expr_seq * posonlyargs, PyArena *arena)
+{
+    callable_type_arguments_ty p;
+    p = (callable_type_arguments_ty)_PyArena_Malloc(arena, sizeof(*p));
+    if (!p)
+        return NULL;
+    p->kind = ArgumentsList_kind;
+    p->v.ArgumentsList.posonlyargs = posonlyargs;
+    return p;
+}
+
+callable_type_arguments_ty
+_PyAST_Concatenation(asdl_expr_seq * posonlyargs, expr_ty param_spec, PyArena
+                     *arena)
+{
+    callable_type_arguments_ty p;
+    if (!param_spec) {
+        PyErr_SetString(PyExc_ValueError,
+                        "field 'param_spec' is required for Concatenation");
+        return NULL;
+    }
+    p = (callable_type_arguments_ty)_PyArena_Malloc(arena, sizeof(*p));
+    if (!p)
+        return NULL;
+    p->kind = Concatenation_kind;
+    p->v.Concatenation.posonlyargs = posonlyargs;
+    p->v.Concatenation.param_spec = param_spec;
     return p;
 }
 
@@ -4500,6 +4666,36 @@ ast2obj_expr(struct ast_state *state, void* _o)
             goto failed;
         Py_DECREF(value);
         break;
+    case AsyncCallableType_kind:
+        tp = (PyTypeObject *)state->AsyncCallableType_type;
+        result = PyType_GenericNew(tp, NULL, NULL);
+        if (!result) goto failed;
+        value = ast2obj_callable_type_arguments(state, o->v.AsyncCallableType.args);
+        if (!value) goto failed;
+        if (PyObject_SetAttr(result, state->args, value) == -1)
+            goto failed;
+        Py_DECREF(value);
+        value = ast2obj_expr(state, o->v.AsyncCallableType.returns);
+        if (!value) goto failed;
+        if (PyObject_SetAttr(result, state->returns, value) == -1)
+            goto failed;
+        Py_DECREF(value);
+        break;
+    case CallableType_kind:
+        tp = (PyTypeObject *)state->CallableType_type;
+        result = PyType_GenericNew(tp, NULL, NULL);
+        if (!result) goto failed;
+        value = ast2obj_callable_type_arguments(state, o->v.CallableType.args);
+        if (!value) goto failed;
+        if (PyObject_SetAttr(result, state->args, value) == -1)
+            goto failed;
+        Py_DECREF(value);
+        value = ast2obj_expr(state, o->v.CallableType.returns);
+        if (!value) goto failed;
+        if (PyObject_SetAttr(result, state->returns, value) == -1)
+            goto failed;
+        Py_DECREF(value);
+        break;
     case Attribute_kind:
         tp = (PyTypeObject *)state->Attribute_type;
         result = PyType_GenericNew(tp, NULL, NULL);
@@ -4973,6 +5169,56 @@ ast2obj_arg(struct ast_state *state, void* _o)
     if (PyObject_SetAttr(result, state->end_col_offset, value) < 0)
         goto failed;
     Py_DECREF(value);
+    return result;
+failed:
+    Py_XDECREF(value);
+    Py_XDECREF(result);
+    return NULL;
+}
+
+PyObject*
+ast2obj_callable_type_arguments(struct ast_state *state, void* _o)
+{
+    callable_type_arguments_ty o = (callable_type_arguments_ty)_o;
+    PyObject *result = NULL, *value = NULL;
+    PyTypeObject *tp;
+    if (!o) {
+        Py_RETURN_NONE;
+    }
+    switch (o->kind) {
+    case AnyArguments_kind:
+        tp = (PyTypeObject *)state->AnyArguments_type;
+        result = PyType_GenericNew(tp, NULL, NULL);
+        if (!result) goto failed;
+        break;
+    case ArgumentsList_kind:
+        tp = (PyTypeObject *)state->ArgumentsList_type;
+        result = PyType_GenericNew(tp, NULL, NULL);
+        if (!result) goto failed;
+        value = ast2obj_list(state, (asdl_seq*)o->v.ArgumentsList.posonlyargs,
+                             ast2obj_expr);
+        if (!value) goto failed;
+        if (PyObject_SetAttr(result, state->posonlyargs, value) == -1)
+            goto failed;
+        Py_DECREF(value);
+        break;
+    case Concatenation_kind:
+        tp = (PyTypeObject *)state->Concatenation_type;
+        result = PyType_GenericNew(tp, NULL, NULL);
+        if (!result) goto failed;
+        value = ast2obj_list(state, (asdl_seq*)o->v.Concatenation.posonlyargs,
+                             ast2obj_expr);
+        if (!value) goto failed;
+        if (PyObject_SetAttr(result, state->posonlyargs, value) == -1)
+            goto failed;
+        Py_DECREF(value);
+        value = ast2obj_expr(state, o->v.Concatenation.param_spec);
+        if (!value) goto failed;
+        if (PyObject_SetAttr(result, state->param_spec, value) == -1)
+            goto failed;
+        Py_DECREF(value);
+        break;
+    }
     return result;
 failed:
     Py_XDECREF(value);
@@ -9158,6 +9404,102 @@ obj2ast_expr(struct ast_state *state, PyObject* obj, expr_ty* out, PyArena*
         if (*out == NULL) goto failed;
         return 0;
     }
+    tp = state->AsyncCallableType_type;
+    isinstance = PyObject_IsInstance(obj, tp);
+    if (isinstance == -1) {
+        return 1;
+    }
+    if (isinstance) {
+        callable_type_arguments_ty args;
+        expr_ty returns;
+
+        if (_PyObject_LookupAttr(obj, state->args, &tmp) < 0) {
+            return 1;
+        }
+        if (tmp == NULL) {
+            PyErr_SetString(PyExc_TypeError, "required field \"args\" missing from AsyncCallableType");
+            return 1;
+        }
+        else {
+            int res;
+            if (Py_EnterRecursiveCall(" while traversing 'AsyncCallableType' node")) {
+                goto failed;
+            }
+            res = obj2ast_callable_type_arguments(state, tmp, &args, arena);
+            Py_LeaveRecursiveCall();
+            if (res != 0) goto failed;
+            Py_CLEAR(tmp);
+        }
+        if (_PyObject_LookupAttr(obj, state->returns, &tmp) < 0) {
+            return 1;
+        }
+        if (tmp == NULL) {
+            PyErr_SetString(PyExc_TypeError, "required field \"returns\" missing from AsyncCallableType");
+            return 1;
+        }
+        else {
+            int res;
+            if (Py_EnterRecursiveCall(" while traversing 'AsyncCallableType' node")) {
+                goto failed;
+            }
+            res = obj2ast_expr(state, tmp, &returns, arena);
+            Py_LeaveRecursiveCall();
+            if (res != 0) goto failed;
+            Py_CLEAR(tmp);
+        }
+        *out = _PyAST_AsyncCallableType(args, returns, lineno, col_offset,
+                                        end_lineno, end_col_offset, arena);
+        if (*out == NULL) goto failed;
+        return 0;
+    }
+    tp = state->CallableType_type;
+    isinstance = PyObject_IsInstance(obj, tp);
+    if (isinstance == -1) {
+        return 1;
+    }
+    if (isinstance) {
+        callable_type_arguments_ty args;
+        expr_ty returns;
+
+        if (_PyObject_LookupAttr(obj, state->args, &tmp) < 0) {
+            return 1;
+        }
+        if (tmp == NULL) {
+            PyErr_SetString(PyExc_TypeError, "required field \"args\" missing from CallableType");
+            return 1;
+        }
+        else {
+            int res;
+            if (Py_EnterRecursiveCall(" while traversing 'CallableType' node")) {
+                goto failed;
+            }
+            res = obj2ast_callable_type_arguments(state, tmp, &args, arena);
+            Py_LeaveRecursiveCall();
+            if (res != 0) goto failed;
+            Py_CLEAR(tmp);
+        }
+        if (_PyObject_LookupAttr(obj, state->returns, &tmp) < 0) {
+            return 1;
+        }
+        if (tmp == NULL) {
+            PyErr_SetString(PyExc_TypeError, "required field \"returns\" missing from CallableType");
+            return 1;
+        }
+        else {
+            int res;
+            if (Py_EnterRecursiveCall(" while traversing 'CallableType' node")) {
+                goto failed;
+            }
+            res = obj2ast_expr(state, tmp, &returns, arena);
+            Py_LeaveRecursiveCall();
+            if (res != 0) goto failed;
+            Py_CLEAR(tmp);
+        }
+        *out = _PyAST_CallableType(args, returns, lineno, col_offset,
+                                   end_lineno, end_col_offset, arena);
+        if (*out == NULL) goto failed;
+        return 0;
+    }
     tp = state->Attribute_type;
     isinstance = PyObject_IsInstance(obj, tp);
     if (isinstance == -1) {
@@ -10569,6 +10911,153 @@ failed:
 }
 
 int
+obj2ast_callable_type_arguments(struct ast_state *state, PyObject* obj,
+                                callable_type_arguments_ty* out, PyArena* arena)
+{
+    int isinstance;
+
+    PyObject *tmp = NULL;
+    PyObject *tp;
+
+    if (obj == Py_None) {
+        *out = NULL;
+        return 0;
+    }
+    tp = state->AnyArguments_type;
+    isinstance = PyObject_IsInstance(obj, tp);
+    if (isinstance == -1) {
+        return 1;
+    }
+    if (isinstance) {
+
+        *out = _PyAST_AnyArguments(arena);
+        if (*out == NULL) goto failed;
+        return 0;
+    }
+    tp = state->ArgumentsList_type;
+    isinstance = PyObject_IsInstance(obj, tp);
+    if (isinstance == -1) {
+        return 1;
+    }
+    if (isinstance) {
+        asdl_expr_seq* posonlyargs;
+
+        if (_PyObject_LookupAttr(obj, state->posonlyargs, &tmp) < 0) {
+            return 1;
+        }
+        if (tmp == NULL) {
+            PyErr_SetString(PyExc_TypeError, "required field \"posonlyargs\" missing from ArgumentsList");
+            return 1;
+        }
+        else {
+            int res;
+            Py_ssize_t len;
+            Py_ssize_t i;
+            if (!PyList_Check(tmp)) {
+                PyErr_Format(PyExc_TypeError, "ArgumentsList field \"posonlyargs\" must be a list, not a %.200s", _PyType_Name(Py_TYPE(tmp)));
+                goto failed;
+            }
+            len = PyList_GET_SIZE(tmp);
+            posonlyargs = _Py_asdl_expr_seq_new(len, arena);
+            if (posonlyargs == NULL) goto failed;
+            for (i = 0; i < len; i++) {
+                expr_ty val;
+                PyObject *tmp2 = PyList_GET_ITEM(tmp, i);
+                Py_INCREF(tmp2);
+                if (Py_EnterRecursiveCall(" while traversing 'ArgumentsList' node")) {
+                    goto failed;
+                }
+                res = obj2ast_expr(state, tmp2, &val, arena);
+                Py_LeaveRecursiveCall();
+                Py_DECREF(tmp2);
+                if (res != 0) goto failed;
+                if (len != PyList_GET_SIZE(tmp)) {
+                    PyErr_SetString(PyExc_RuntimeError, "ArgumentsList field \"posonlyargs\" changed size during iteration");
+                    goto failed;
+                }
+                asdl_seq_SET(posonlyargs, i, val);
+            }
+            Py_CLEAR(tmp);
+        }
+        *out = _PyAST_ArgumentsList(posonlyargs, arena);
+        if (*out == NULL) goto failed;
+        return 0;
+    }
+    tp = state->Concatenation_type;
+    isinstance = PyObject_IsInstance(obj, tp);
+    if (isinstance == -1) {
+        return 1;
+    }
+    if (isinstance) {
+        asdl_expr_seq* posonlyargs;
+        expr_ty param_spec;
+
+        if (_PyObject_LookupAttr(obj, state->posonlyargs, &tmp) < 0) {
+            return 1;
+        }
+        if (tmp == NULL) {
+            PyErr_SetString(PyExc_TypeError, "required field \"posonlyargs\" missing from Concatenation");
+            return 1;
+        }
+        else {
+            int res;
+            Py_ssize_t len;
+            Py_ssize_t i;
+            if (!PyList_Check(tmp)) {
+                PyErr_Format(PyExc_TypeError, "Concatenation field \"posonlyargs\" must be a list, not a %.200s", _PyType_Name(Py_TYPE(tmp)));
+                goto failed;
+            }
+            len = PyList_GET_SIZE(tmp);
+            posonlyargs = _Py_asdl_expr_seq_new(len, arena);
+            if (posonlyargs == NULL) goto failed;
+            for (i = 0; i < len; i++) {
+                expr_ty val;
+                PyObject *tmp2 = PyList_GET_ITEM(tmp, i);
+                Py_INCREF(tmp2);
+                if (Py_EnterRecursiveCall(" while traversing 'Concatenation' node")) {
+                    goto failed;
+                }
+                res = obj2ast_expr(state, tmp2, &val, arena);
+                Py_LeaveRecursiveCall();
+                Py_DECREF(tmp2);
+                if (res != 0) goto failed;
+                if (len != PyList_GET_SIZE(tmp)) {
+                    PyErr_SetString(PyExc_RuntimeError, "Concatenation field \"posonlyargs\" changed size during iteration");
+                    goto failed;
+                }
+                asdl_seq_SET(posonlyargs, i, val);
+            }
+            Py_CLEAR(tmp);
+        }
+        if (_PyObject_LookupAttr(obj, state->param_spec, &tmp) < 0) {
+            return 1;
+        }
+        if (tmp == NULL) {
+            PyErr_SetString(PyExc_TypeError, "required field \"param_spec\" missing from Concatenation");
+            return 1;
+        }
+        else {
+            int res;
+            if (Py_EnterRecursiveCall(" while traversing 'Concatenation' node")) {
+                goto failed;
+            }
+            res = obj2ast_expr(state, tmp, &param_spec, arena);
+            Py_LeaveRecursiveCall();
+            if (res != 0) goto failed;
+            Py_CLEAR(tmp);
+        }
+        *out = _PyAST_Concatenation(posonlyargs, param_spec, arena);
+        if (*out == NULL) goto failed;
+        return 0;
+    }
+
+    PyErr_Format(PyExc_TypeError, "expected some sort of callable_type_arguments, but got %R", obj);
+    failed:
+    Py_XDECREF(tmp);
+    return 1;
+}
+
+int
 obj2ast_keyword(struct ast_state *state, PyObject* obj, keyword_ty* out,
                 PyArena* arena)
 {
@@ -11779,6 +12268,14 @@ astmodule_exec(PyObject *m)
     if (PyModule_AddObjectRef(m, "Constant", state->Constant_type) < 0) {
         return -1;
     }
+    if (PyModule_AddObjectRef(m, "AsyncCallableType",
+        state->AsyncCallableType_type) < 0) {
+        return -1;
+    }
+    if (PyModule_AddObjectRef(m, "CallableType", state->CallableType_type) < 0)
+        {
+        return -1;
+    }
     if (PyModule_AddObjectRef(m, "Attribute", state->Attribute_type) < 0) {
         return -1;
     }
@@ -11928,6 +12425,22 @@ astmodule_exec(PyObject *m)
         return -1;
     }
     if (PyModule_AddObjectRef(m, "arg", state->arg_type) < 0) {
+        return -1;
+    }
+    if (PyModule_AddObjectRef(m, "callable_type_arguments",
+        state->callable_type_arguments_type) < 0) {
+        return -1;
+    }
+    if (PyModule_AddObjectRef(m, "AnyArguments", state->AnyArguments_type) < 0)
+        {
+        return -1;
+    }
+    if (PyModule_AddObjectRef(m, "ArgumentsList", state->ArgumentsList_type) <
+        0) {
+        return -1;
+    }
+    if (PyModule_AddObjectRef(m, "Concatenation", state->Concatenation_type) <
+        0) {
         return -1;
     }
     if (PyModule_AddObjectRef(m, "keyword", state->keyword_type) < 0) {

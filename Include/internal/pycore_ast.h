@@ -39,6 +39,8 @@ typedef struct _arguments *arguments_ty;
 
 typedef struct _arg *arg_ty;
 
+typedef struct _callable_type_arguments *callable_type_arguments_ty;
+
 typedef struct _keyword *keyword_ty;
 
 typedef struct _alias *alias_ty;
@@ -102,6 +104,14 @@ typedef struct {
 } asdl_arg_seq;
 
 asdl_arg_seq *_Py_asdl_arg_seq_new(Py_ssize_t size, PyArena *arena);
+
+typedef struct {
+    _ASDL_SEQ_HEAD
+    callable_type_arguments_ty typed_elements[1];
+} asdl_callable_type_arguments_seq;
+
+asdl_callable_type_arguments_seq
+*_Py_asdl_callable_type_arguments_seq_new(Py_ssize_t size, PyArena *arena);
 
 typedef struct {
     _ASDL_SEQ_HEAD
@@ -335,8 +345,9 @@ enum _expr_kind {BoolOp_kind=1, NamedExpr_kind=2, BinOp_kind=3, UnaryOp_kind=4,
                   GeneratorExp_kind=12, Await_kind=13, Yield_kind=14,
                   YieldFrom_kind=15, Compare_kind=16, Call_kind=17,
                   FormattedValue_kind=18, JoinedStr_kind=19, Constant_kind=20,
-                  Attribute_kind=21, Subscript_kind=22, Starred_kind=23,
-                  Name_kind=24, List_kind=25, Tuple_kind=26, Slice_kind=27};
+                  AsyncCallableType_kind=21, CallableType_kind=22,
+                  Attribute_kind=23, Subscript_kind=24, Starred_kind=25,
+                  Name_kind=26, List_kind=27, Tuple_kind=28, Slice_kind=29};
 struct _expr {
     enum _expr_kind kind;
     union {
@@ -442,6 +453,16 @@ struct _expr {
         } Constant;
 
         struct {
+            callable_type_arguments_ty args;
+            expr_ty returns;
+        } AsyncCallableType;
+
+        struct {
+            callable_type_arguments_ty args;
+            expr_ty returns;
+        } CallableType;
+
+        struct {
             expr_ty value;
             identifier attr;
             expr_context_ty ctx;
@@ -528,6 +549,23 @@ struct _arg {
     int col_offset;
     int end_lineno;
     int end_col_offset;
+};
+
+enum _callable_type_arguments_kind {AnyArguments_kind=1, ArgumentsList_kind=2,
+                                     Concatenation_kind=3};
+struct _callable_type_arguments {
+    enum _callable_type_arguments_kind kind;
+    union {
+        struct {
+            asdl_expr_seq *posonlyargs;
+        } ArgumentsList;
+
+        struct {
+            asdl_expr_seq *posonlyargs;
+            expr_ty param_spec;
+        } Concatenation;
+
+    } v;
 };
 
 struct _keyword {
@@ -763,6 +801,13 @@ expr_ty _PyAST_JoinedStr(asdl_expr_seq * values, int lineno, int col_offset,
 expr_ty _PyAST_Constant(constant value, string kind, int lineno, int
                         col_offset, int end_lineno, int end_col_offset, PyArena
                         *arena);
+expr_ty _PyAST_AsyncCallableType(callable_type_arguments_ty args, expr_ty
+                                 returns, int lineno, int col_offset, int
+                                 end_lineno, int end_col_offset, PyArena
+                                 *arena);
+expr_ty _PyAST_CallableType(callable_type_arguments_ty args, expr_ty returns,
+                            int lineno, int col_offset, int end_lineno, int
+                            end_col_offset, PyArena *arena);
 expr_ty _PyAST_Attribute(expr_ty value, identifier attr, expr_context_ty ctx,
                          int lineno, int col_offset, int end_lineno, int
                          end_col_offset, PyArena *arena);
@@ -798,6 +843,12 @@ arguments_ty _PyAST_arguments(asdl_arg_seq * posonlyargs, asdl_arg_seq * args,
 arg_ty _PyAST_arg(identifier arg, expr_ty annotation, string type_comment, int
                   lineno, int col_offset, int end_lineno, int end_col_offset,
                   PyArena *arena);
+callable_type_arguments_ty _PyAST_AnyArguments(PyArena *arena);
+callable_type_arguments_ty _PyAST_ArgumentsList(asdl_expr_seq * posonlyargs,
+                                                PyArena *arena);
+callable_type_arguments_ty _PyAST_Concatenation(asdl_expr_seq * posonlyargs,
+                                                expr_ty param_spec, PyArena
+                                                *arena);
 keyword_ty _PyAST_keyword(identifier arg, expr_ty value, int lineno, int
                           col_offset, int end_lineno, int end_col_offset,
                           PyArena *arena);

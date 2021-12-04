@@ -18,8 +18,11 @@ struct ast_state {
     PyObject *And_singleton;
     PyObject *And_type;
     PyObject *AnnAssign_type;
+    PyObject *AnyArguments_type;
+    PyObject *ArgumentsList_type;
     PyObject *Assert_type;
     PyObject *Assign_type;
+    PyObject *AsyncCallableType_type;
     PyObject *AsyncFor_type;
     PyObject *AsyncFunctionDef_type;
     PyObject *AsyncWith_type;
@@ -36,8 +39,10 @@ struct ast_state {
     PyObject *BoolOp_type;
     PyObject *Break_type;
     PyObject *Call_type;
+    PyObject *CallableType_type;
     PyObject *ClassDef_type;
     PyObject *Compare_type;
+    PyObject *Concatenation_type;
     PyObject *Constant_type;
     PyObject *Continue_type;
     PyObject *Del_singleton;
@@ -163,6 +168,7 @@ struct ast_state {
     PyObject *bases;
     PyObject *body;
     PyObject *boolop_type;
+    PyObject *callable_type_arguments_type;
     PyObject *cases;
     PyObject *cause;
     PyObject *cls;
@@ -220,6 +226,7 @@ struct ast_state {
     PyObject *ops;
     PyObject *optional_vars;
     PyObject *orelse;
+    PyObject *param_spec;
     PyObject *pattern;
     PyObject *pattern_type;
     PyObject *patterns;
