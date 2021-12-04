@@ -354,6 +354,11 @@ validate_expr(struct validator *state, expr_ty exp, expr_context_ty ctx)
     case NamedExpr_kind:
         ret = validate_expr(state, exp->v.NamedExpr.value, Load);
         break;
+    /* Validation not yet implemented for callable type expressions */
+    case CallableType_kind:
+    case AsyncCallableType_kind:
+        ret = 1;
+        break;
     /* This last case doesn't have any checking. */
     case Name_kind:
         ret = 1;
