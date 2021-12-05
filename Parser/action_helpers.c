@@ -474,6 +474,239 @@ _PyPegen_get_patterns(Parser *p, asdl_seq *seq)
     return new_seq;
 }
 
+/*** START new helpers for extended callable syntax ***/
+
+
+/* Helpers exposed to the grammar actions to build up temporary data */
+
+CallableTypePositionalDefaultPair *
+_PyPegen_ct_positional_default_pair(Parser *p, expr_ty arg, expr_ty value)
+{
+    CallableTypePositionalDefaultPair *a = _PyArena_Malloc(
+        p->arena, sizeof(CallableTypePositionalDefaultPair));
+    if (!a) {
+        return NULL;
+    }
+    a->arg = arg;
+    a->value = value;
+    return a;
+}
+
+CallableTypeDefaultPair *
+_PyPegen_ct_default_pair(Parser *p, callable_type_arg_ty arg, expr_ty value)
+{
+    CallableTypeDefaultPair *a = _PyArena_Malloc(p->arena, sizeof(CallableTypeDefaultPair));
+    if (!a) {
+        return NULL;
+    }
+    a->arg = arg;
+    a->value = value;
+    return a;
+}
+
+asdl_seq *
+_PyPegen_empty_seq(Parser *p)
+{
+    asdl_seq *seq = (asdl_seq*)_Py_asdl_generic_seq_new(0, p->arena);
+    if (!seq) {
+        return NULL;
+    }
+    return seq;
+}
+
+/* Private helpers for turning temp data into final Ast */
+
+asdl_expr_seq *
+_ct_make_posonlyargs(
+    Parser *p,
+    asdl_seq *posonlyargs_with_defaults
+) {
+    Py_ssize_t len = asdl_seq_LEN(posonlyargs_with_defaults);
+    asdl_expr_seq *posonlyargs = _Py_asdl_expr_seq_new(len, p->arena);
+    if (!posonlyargs) {
+        return NULL;
+    }
+    for (Py_ssize_t i = 0; i < len; i++) {
+        CallableTypePositionalDefaultPair *pair = asdl_seq_GET_UNTYPED(
+            posonlyargs_with_defaults, i);
+        asdl_seq_SET(posonlyargs, i, pair->arg);
+    }
+    return posonlyargs;
+}
+
+asdl_callable_type_arg_seq *
+_ct_make_named_args(
+    Parser *p,
+    asdl_seq *named_args_with_defaults
+) {
+    Py_ssize_t len = asdl_seq_LEN(named_args_with_defaults);
+    asdl_callable_type_arg_seq *named_args = _Py_asdl_callable_type_arg_seq_new(
+        len, p->arena);
+    if (!named_args) {
+        return NULL;
+    }
+    for (Py_ssize_t i = 0; i < len; i++) {
+        CallableTypeDefaultPair *pair = asdl_seq_GET_UNTYPED(
+            named_args_with_defaults, i);
+        asdl_seq_SET(named_args, i, pair->arg);
+    }
+    return named_args;
+}
+
+asdl_expr_seq *
+_ct_make_kw_defaults(
+    Parser* p,
+    asdl_seq *kwonlyargs_with_defaults
+) {
+    Py_ssize_t raw_len = asdl_seq_LEN(kwonlyargs_with_defaults);
+
+    /* determine the number of defaults */
+    Py_ssize_t len = 0;
+    for (Py_ssize_t i = 0; i < raw_len; i++) {
+        CallableTypeDefaultPair *pair = asdl_seq_GET_UNTYPED(
+            kwonlyargs_with_defaults, i);
+        if (pair->value) {
+           len += 1;
+        }
+    }
+
+    /* Construct the kw_defaults */
+    asdl_expr_seq* kw_defaults = _Py_asdl_expr_seq_new(len, p->arena);
+    if (!kw_defaults) {
+        return NULL;
+    }
+    Py_ssize_t position = 0;
+    for (Py_ssize_t i = 0; i < raw_len; i++) {
+        CallableTypeDefaultPair *pair = asdl_seq_GET_UNTYPED(
+            kwonlyargs_with_defaults, i);
+        if (pair->value) {
+            asdl_seq_SET(
+                kw_defaults, position, pair->value);
+            position += 1;
+        }
+    }
+    return kw_defaults;
+}
+
+asdl_expr_seq *
+_ct_make_defaults(
+    Parser* p,
+    asdl_seq *posonlyargs_with_defaults,
+    asdl_seq *args_with_defaults
+) {
+    Py_ssize_t posonlyargs_len = asdl_seq_LEN(posonlyargs_with_defaults);
+    Py_ssize_t args_len = asdl_seq_LEN(args_with_defaults);
+
+
+    /* determine the number of defaults */
+    Py_ssize_t len = 0;
+    for (Py_ssize_t i = 0; i < posonlyargs_len; i++) {
+        CallableTypePositionalDefaultPair *pair = asdl_seq_GET_UNTYPED(
+            posonlyargs_with_defaults, i);
+        if (pair->value) {
+           len += 1;
+        }
+    }
+    for (Py_ssize_t i = 0; i < args_len; i++) {
+        CallableTypeDefaultPair *pair = asdl_seq_GET_UNTYPED(
+            args_with_defaults, i);
+        if (pair->value) {
+           len += 1;
+        }
+    }
+
+    /* Construct the defaults */
+    asdl_expr_seq* defaults = _Py_asdl_expr_seq_new(len, p->arena);
+    if (!defaults) {
+        return NULL;
+    }
+    Py_ssize_t position = 0;
+    for (Py_ssize_t i = 0; i < posonlyargs_len; i++) {
+        CallableTypePositionalDefaultPair *pair = asdl_seq_GET_UNTYPED(
+            posonlyargs_with_defaults, i);
+        if (pair->value) {
+            asdl_seq_SET(
+                defaults, position, pair->value);
+            position += 1;
+        }
+    }
+    for (Py_ssize_t i = 0; i < args_len; i++) {
+        CallableTypeDefaultPair *pair = asdl_seq_GET_UNTYPED(
+            args_with_defaults, i);
+        if (pair->value) {
+            asdl_seq_SET(
+                defaults, position, pair->value);
+            position += 1;
+        }
+    }
+    return defaults;
+}
+
+/* Helpers used in grammar actions to produce final Ast */
+
+callable_type_arguments_ty
+_PyPegen_ct_arguments_list(
+    Parser *p,
+    asdl_seq *posonlyargs_with_defaults,
+    asdl_seq *args_with_defaults,
+    callable_type_arg_ty vararg,
+    asdl_seq *kwonlyargs_with_defaults,
+    callable_type_arg_ty kwarg
+) {
+    asdl_expr_seq* posonlyargs = _ct_make_posonlyargs(
+        p, posonlyargs_with_defaults);
+    asdl_callable_type_arg_seq* args = _ct_make_named_args(
+        p, args_with_defaults);
+    asdl_callable_type_arg_seq* kwonlyargs = _ct_make_named_args(
+        p, kwonlyargs_with_defaults);
+    asdl_expr_seq* kw_defaults = _ct_make_kw_defaults(
+        p, kwonlyargs_with_defaults);
+    asdl_expr_seq* defaults = _ct_make_defaults(
+        p, posonlyargs_with_defaults, args_with_defaults);
+    return _PyAST_ArgumentsList(
+        posonlyargs,
+        args,
+        vararg,
+        kwonlyargs,
+        kwarg,
+        kw_defaults,
+        defaults,
+        p->arena
+    );
+}
+
+callable_type_arguments_ty
+_PyPegen_ct_concatenation(
+    Parser *p,
+    asdl_seq *posonlyargs_with_defaults,
+    asdl_seq *args_with_defaults,
+    asdl_seq *kwonlyargs_with_defaults,
+    expr_ty param_spec
+) {
+    asdl_expr_seq* posonlyargs = _ct_make_posonlyargs(
+        p, posonlyargs_with_defaults);
+    asdl_callable_type_arg_seq* args = _ct_make_named_args(
+        p, args_with_defaults);
+    asdl_callable_type_arg_seq* kwonlyargs = _ct_make_named_args(
+        p, kwonlyargs_with_defaults);
+    asdl_expr_seq* kw_defaults = _ct_make_kw_defaults(
+        p, kwonlyargs_with_defaults);
+    asdl_expr_seq* defaults = _ct_make_defaults(
+        p, posonlyargs_with_defaults, args_with_defaults);
+    return _PyAST_Concatenation(
+        posonlyargs,
+        args,
+        kwonlyargs,
+        kw_defaults,
+        defaults,
+        param_spec,
+        p->arena
+    );
+}
+
+
+/*** END new helpers for extended callable syntax ***/
+
 /* Constructs a NameDefaultPair */
 NameDefaultPair *
 _PyPegen_name_default_pair(Parser *p, arg_ty arg, expr_ty value, Token *tc)

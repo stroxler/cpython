@@ -100,6 +100,17 @@ typedef struct {
     expr_ty value;
 } NameDefaultPair;
 
+
+typedef struct {
+    expr_ty arg;
+    expr_ty value;
+} CallableTypePositionalDefaultPair;
+
+typedef struct {
+    callable_type_arg_ty arg;
+    expr_ty value;
+} CallableTypeDefaultPair;
+
 typedef struct {
     asdl_arg_seq *plain_names;
     asdl_seq *names_with_defaults; // asdl_seq* of NameDefaultsPair's
@@ -300,6 +311,21 @@ asdl_expr_seq *_PyPegen_get_values(Parser *, asdl_seq *);
 KeyPatternPair *_PyPegen_key_pattern_pair(Parser *, expr_ty, pattern_ty);
 asdl_expr_seq *_PyPegen_get_pattern_keys(Parser *, asdl_seq *);
 asdl_pattern_seq *_PyPegen_get_patterns(Parser *, asdl_seq *);
+
+CallableTypePositionalDefaultPair *_PyPegen_ct_positional_default_pair(
+    Parser *, expr_ty, expr_ty);
+CallableTypeDefaultPair *_PyPegen_ct_default_pair(
+    Parser*, callable_type_arg_ty, expr_ty);
+asdl_seq *_PyPegen_empty_seq(Parser *);
+callable_type_arguments_ty _PyPegen_ct_arguments_list(
+    Parser *,
+    asdl_seq *, asdl_seq *, callable_type_arg_ty, asdl_seq *,
+    callable_type_arg_ty);
+callable_type_arguments_ty _PyPegen_ct_concatenation(
+    Parser *,
+    asdl_seq *, asdl_seq *, asdl_seq *,
+    expr_ty);
+
 NameDefaultPair *_PyPegen_name_default_pair(Parser *, arg_ty, expr_ty, Token *);
 SlashWithDefault *_PyPegen_slash_with_default(Parser *, asdl_arg_seq *, asdl_seq *);
 StarEtc *_PyPegen_star_etc(Parser *, arg_ty, asdl_seq *, arg_ty);

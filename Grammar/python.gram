@@ -859,17 +859,106 @@ callable_type_expression:
     | ASYNC a=callable_type_arguments '->' r=expression {
        _PyAST_AsyncCallableType(a, r, EXTRA) }
 
-callable_type_arguments:
+callable_type_arguments[callable_type_arguments_ty]:
     | '(' '...' ')' { _PyAST_AnyArguments(p->arena) }
-    | '(' a[asdl_expr_seq*]=callable_type_positional_argument*  ')' {
-        _PyAST_ArgumentsList(a, p->arena) }
-    | '(' a[asdl_expr_seq*]=callable_type_positional_argument* ps=callable_type_param_spec ')' {
-        _PyAST_Concatenation(a, ps, p->arena) }
+    | '(' a=callable_type_arguments_list ')' { a }
+    | '(' a=callable_type_concatenation ')' { a }
+
+callable_type_arguments_list[callable_type_arguments_ty]:
+    | pas=callable_type_positional_argument* \
+      nas=callable_type_named_argument* \
+      '*' ',' \
+      kas=callable_type_named_argument* \
+      kw=callable_type_kwarg? \
+      &')' {
+        _PyPegen_ct_arguments_list(
+           p,
+           pas,
+           nas,
+           NULL,
+           kas,
+           kw
+        )
+      }
+    | pas=callable_type_positional_argument* \
+      nas=callable_type_named_argument* \
+      va=callable_type_vararg \
+      kas=callable_type_named_argument* \
+      kw=callable_type_kwarg? \
+      &')' {
+        _PyPegen_ct_arguments_list(
+           p,
+           pas,
+           nas,
+           va,
+           kas,
+           kw
+        )
+      }
+    | pas=callable_type_positional_argument* \
+      nas=callable_type_named_argument* \
+      kw=callable_type_kwarg? \
+      &')' {
+        _PyPegen_ct_arguments_list(
+           p,
+           pas,
+           nas,
+           NULL,
+           _PyPegen_empty_seq(p),
+           kw
+        )
+      }
+
+callable_type_concatenation[callable_type_arguments_ty]:
+    | pas=callable_type_positional_argument* \
+      nas=callable_type_named_argument* \
+      '*' ',' \
+      kas=callable_type_named_argument* \
+      ps=callable_type_param_spec \
+      &')' {
+        _PyPegen_ct_concatenation(
+           p,
+           pas,
+           nas,
+           kas,
+           ps
+        )
+      }
+    | pas=callable_type_positional_argument* \
+      nas=callable_type_named_argument* \
+      ps=callable_type_param_spec \
+      &')' {
+        _PyPegen_ct_concatenation(
+           p,
+           pas,
+           nas,
+           _PyPegen_empty_seq(p),
+           ps
+        )
+      }
 
 callable_type_positional_argument:
-    | e=expression ',' { e }
-    | e=expression &')' { e }
+    | e=expression d=callable_type_default? ',' { _PyPegen_ct_positional_default_pair(p, e, d) }
+    | e=expression d=callable_type_default? &')' { _PyPegen_ct_positional_default_pair(p, e, d) }
 
+callable_type_vararg[callable_type_arg_ty]:
+    | '*' a=callable_type_named_argument_no_default ',' { a }
+    | '*' a=callable_type_named_argument_no_default &')' { a }
+
+callable_type_kwarg[callable_type_arg_ty]:
+    | '**' a=callable_type_named_argument_no_default { a }
+
+callable_type_named_argument:
+    | a=callable_type_named_argument_no_default d=callable_type_default? ',' { _PyPegen_ct_default_pair(p, a, d) }
+    | a=callable_type_named_argument_no_default d=callable_type_default? &')' { _PyPegen_ct_default_pair(p, a, d) }
+
+callable_type_named_argument_no_default[callable_type_arg_ty]:
+    | n=NAME ':' e=expression { _PyAST_callable_type_arg(n->v.Name.id, e, p->arena) }
+
+callable_type_default[expr_ty]:
+    | '=' '...' { _PyAST_Constant(Py_Ellipsis, NULL, EXTRA) }
+
+    
 callable_type_param_spec:
     | '**' e=expression ',' { e }
     | '**' e=expression &')' { e }
