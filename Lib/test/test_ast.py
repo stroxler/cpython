@@ -260,6 +260,8 @@ callable_syntax_tests = [
     "(int) -> (str) -> bool",
     # Right-associativity of -> and | (so that | binds in return position)
     "(int) -> str | bool",
+    # async, including how it behaves in return position
+    "(int) -> async (float) -> str | bool",
 ]
 
 # TODO: expr_context, slice, boolop, operator, unaryop, cmpop, comprehension
