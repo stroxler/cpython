@@ -14687,7 +14687,7 @@ callable_type_arguments_rule(Parser *p)
     return _res;
 }
 
-// callable_type_positional_argument: expression ',' | expression &')'
+// callable_type_positional_argument: !'...' expression ',' | !'...' expression &')'
 static void *
 callable_type_positional_argument_rule(Parser *p)
 {
@@ -14698,21 +14698,23 @@ callable_type_positional_argument_rule(Parser *p)
     }
     void * _res = NULL;
     int _mark = p->mark;
-    { // expression ','
+    { // !'...' expression ','
         if (p->error_indicator) {
             D(p->level--);
             return NULL;
         }
-        D(fprintf(stderr, "%*c> callable_type_positional_argument[%d-%d]: %s\n", p->level, ' ', _mark, p->mark, "expression ','"));
+        D(fprintf(stderr, "%*c> callable_type_positional_argument[%d-%d]: %s\n", p->level, ' ', _mark, p->mark, "!'...' expression ','"));
         Token * _literal;
         expr_ty e;
         if (
+            _PyPegen_lookahead_with_int(0, _PyPegen_expect_token, p, 52)  // token='...'
+            &&
             (e = expression_rule(p))  // expression
             &&
             (_literal = _PyPegen_expect_token(p, 12))  // token=','
         )
         {
-            D(fprintf(stderr, "%*c+ callable_type_positional_argument[%d-%d]: %s succeeded!\n", p->level, ' ', _mark, p->mark, "expression ','"));
+            D(fprintf(stderr, "%*c+ callable_type_positional_argument[%d-%d]: %s succeeded!\n", p->level, ' ', _mark, p->mark, "!'...' expression ','"));
             _res = e;
             if (_res == NULL && PyErr_Occurred()) {
                 p->error_indicator = 1;
@@ -14723,22 +14725,24 @@ callable_type_positional_argument_rule(Parser *p)
         }
         p->mark = _mark;
         D(fprintf(stderr, "%*c%s callable_type_positional_argument[%d-%d]: %s failed!\n", p->level, ' ',
-                  p->error_indicator ? "ERROR!" : "-", _mark, p->mark, "expression ','"));
+                  p->error_indicator ? "ERROR!" : "-", _mark, p->mark, "!'...' expression ','"));
     }
-    { // expression &')'
+    { // !'...' expression &')'
         if (p->error_indicator) {
             D(p->level--);
             return NULL;
         }
-        D(fprintf(stderr, "%*c> callable_type_positional_argument[%d-%d]: %s\n", p->level, ' ', _mark, p->mark, "expression &')'"));
+        D(fprintf(stderr, "%*c> callable_type_positional_argument[%d-%d]: %s\n", p->level, ' ', _mark, p->mark, "!'...' expression &')'"));
         expr_ty e;
         if (
+            _PyPegen_lookahead_with_int(0, _PyPegen_expect_token, p, 52)  // token='...'
+            &&
             (e = expression_rule(p))  // expression
             &&
             _PyPegen_lookahead_with_int(1, _PyPegen_expect_token, p, 8)  // token=')'
         )
         {
-            D(fprintf(stderr, "%*c+ callable_type_positional_argument[%d-%d]: %s succeeded!\n", p->level, ' ', _mark, p->mark, "expression &')'"));
+            D(fprintf(stderr, "%*c+ callable_type_positional_argument[%d-%d]: %s succeeded!\n", p->level, ' ', _mark, p->mark, "!'...' expression &')'"));
             _res = e;
             if (_res == NULL && PyErr_Occurred()) {
                 p->error_indicator = 1;
@@ -14749,7 +14753,7 @@ callable_type_positional_argument_rule(Parser *p)
         }
         p->mark = _mark;
         D(fprintf(stderr, "%*c%s callable_type_positional_argument[%d-%d]: %s failed!\n", p->level, ' ',
-                  p->error_indicator ? "ERROR!" : "-", _mark, p->mark, "expression &')'"));
+                  p->error_indicator ? "ERROR!" : "-", _mark, p->mark, "!'...' expression &')'"));
     }
     _res = NULL;
   done:

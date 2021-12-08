@@ -381,6 +381,16 @@ class AST_Tests(unittest.TestCase):
                 "(int) -> bool + () -> bool",
                 # Trailing commas are not legal for empty arguments lists
                 "(,) -> bool",
+                # We explicitly forbid using `...` as an argument type because
+                # that could lead to a great deal of confusion, both due to
+                # the fact that it represents AnyArguments in the existing
+                # syntax and due to the fact that it's often used to indicate
+                # default values in function signatures.
+                #
+                # A desirable side effect is that a trailing comma after ...
+                # is not legal.
+                "(int, ...) -> bool",
+                "(...,) -> bool",
         ]:
             self.assertRaises(SyntaxError, ast.parse, invalid_example)
 
