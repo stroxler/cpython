@@ -1,5 +1,6 @@
-import unittest
 import ast
+import sys
+import unittest
 
 """
 This module isn't intended to merge, we just want it here for a more
@@ -54,7 +55,13 @@ class CallableTypeOperatorBindingTests(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    unittest.main()
+    if sys.argv[1:] == ['--print-examples']:
+        for implicit_binding, explicit_binding in binding_examples:
+            print(implicit_binding)
+            print(explicit_binding)
+            print()
+    else:
+        unittest.main()
 
 
 
