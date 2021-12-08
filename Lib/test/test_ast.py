@@ -278,6 +278,11 @@ callable_type_eval_tests = [
     "(int) -> async (float) -> str | bool",
     # To use a callable type as part of a | requires parentheses
     "bool | (() -> bool)",
+    # Other operators don't currenty carry semantic meaning when applied to
+    # types, but they should work the same way syntactically
+    "bool | (() -> bool)",
+    "bool * (() -> bool)",
+    "bool + (() -> bool)",
 ]
 
 # TODO: expr_context, slice, boolop, operator, unaryop, cmpop, comprehension
@@ -366,7 +371,12 @@ class AST_Tests(unittest.TestCase):
                 # It is illegal to use a union type in an | union, which is
                 # intended: | binds tighter than -> in order to allow unions
                 # in return position.
-                "(int) -> bool | () -> bool"
+                "(int) -> bool | () -> bool",
+                # Other operators don't make semantic sense and would be
+                # rejected by type checkers in any case, but they should behave
+                # the same way.
+                "(int) -> bool * () -> bool",
+                "(int) -> bool + () -> bool",
         ]:
             self.assertRaises(SyntaxError, ast.parse, invalid_example)
 
@@ -2474,5 +2484,8 @@ callable_type_eval_results = [
 ('Expression', ('CallableType', (1, 0, 1, 19), ('ArgumentsList', [('Name', (1, 1, 1, 4), 'int', ('Load',))]), ('BinOp', (1, 9, 1, 19), ('Name', (1, 9, 1, 12), 'str', ('Load',)), ('BitOr',), ('Name', (1, 15, 1, 19), 'bool', ('Load',))))),
 ('Expression', ('CallableType', (1, 0, 1, 36), ('ArgumentsList', [('Name', (1, 1, 1, 4), 'int', ('Load',))]), ('AsyncCallableType', (1, 9, 1, 36), ('ArgumentsList', [('Name', (1, 16, 1, 21), 'float', ('Load',))]), ('BinOp', (1, 26, 1, 36), ('Name', (1, 26, 1, 29), 'str', ('Load',)), ('BitOr',), ('Name', (1, 32, 1, 36), 'bool', ('Load',)))))),
 ('Expression', ('BinOp', (1, 0, 1, 19), ('Name', (1, 0, 1, 4), 'bool', ('Load',)), ('BitOr',), ('CallableType', (1, 8, 1, 18), ('ArgumentsList', []), ('Name', (1, 14, 1, 18), 'bool', ('Load',))))),
+('Expression', ('BinOp', (1, 0, 1, 19), ('Name', (1, 0, 1, 4), 'bool', ('Load',)), ('BitOr',), ('CallableType', (1, 8, 1, 18), ('ArgumentsList', []), ('Name', (1, 14, 1, 18), 'bool', ('Load',))))),
+('Expression', ('BinOp', (1, 0, 1, 19), ('Name', (1, 0, 1, 4), 'bool', ('Load',)), ('Mult',), ('CallableType', (1, 8, 1, 18), ('ArgumentsList', []), ('Name', (1, 14, 1, 18), 'bool', ('Load',))))),
+('Expression', ('BinOp', (1, 0, 1, 19), ('Name', (1, 0, 1, 4), 'bool', ('Load',)), ('Add',), ('CallableType', (1, 8, 1, 18), ('ArgumentsList', []), ('Name', (1, 14, 1, 18), 'bool', ('Load',))))),
 ]
 main()
