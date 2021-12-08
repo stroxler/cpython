@@ -163,6 +163,17 @@ exec_tests = [
     "def f(a=1, /, b=2, *, c, **kwargs): pass",
 
 ]
+callable_type_exec_tests = [
+    # callable types in argument positions
+    "def f(g: (int) -> bool, h: (...) -> bool): pass",
+    "def f(g: async (int, **P) -> bool): pass",
+    # callable types in return positions
+    "def f() -> (int, str) -> bool: pass",
+    "def f() -> (int) -> (str) -> bool: pass",
+    # async callable types in the return position
+    "def f() -> async (int, str) -> bool: pass",
+    "def f() -> async (int) -> async (str) -> bool: pass",
+]
 
 # These are compiled through "single"
 # because of overlap with "eval", it just tests what
@@ -338,6 +349,7 @@ class AST_Tests(unittest.TestCase):
         # we should move the snippets into `exec_tests`, regenerate outputs,
         # and clean up the `-g` logic.
         for input, output, kind in (
+                (callable_type_exec_tests, callable_type_exec_results, "exec"),
                 (callable_type_eval_tests, callable_type_eval_results, "eval"),
         ):
             for i, o in zip(input, output):
@@ -2309,6 +2321,7 @@ def main():
     if sys.argv[1:] == ['-g']:
         for statements, kind in ((exec_tests, "exec"), (single_tests, "single"),
                                  (eval_tests, "eval"),
+                                 (callable_type_exec_tests, "callable_type_exec"),
                                  (callable_type_eval_tests, "callable_type_eval")):
             print(kind+"_results = [")
             for statement in statements:
@@ -2428,6 +2441,14 @@ eval_results = [
 ('Expression', ('Tuple', (1, 0, 1, 7), [('Constant', (1, 1, 1, 2), 1, None), ('Constant', (1, 3, 1, 4), 2, None), ('Constant', (1, 5, 1, 6), 3, None)], ('Load',))),
 ('Expression', ('Tuple', (1, 0, 1, 2), [], ('Load',))),
 ('Expression', ('Call', (1, 0, 1, 17), ('Attribute', (1, 0, 1, 7), ('Attribute', (1, 0, 1, 5), ('Attribute', (1, 0, 1, 3), ('Name', (1, 0, 1, 1), 'a', ('Load',)), 'b', ('Load',)), 'c', ('Load',)), 'd', ('Load',)), [('Subscript', (1, 8, 1, 16), ('Attribute', (1, 8, 1, 11), ('Name', (1, 8, 1, 9), 'a', ('Load',)), 'b', ('Load',)), ('Slice', (1, 12, 1, 15), ('Constant', (1, 12, 1, 13), 1, None), ('Constant', (1, 14, 1, 15), 2, None), None), ('Load',))], [])),
+]
+callable_type_exec_results = [
+('Module', [('FunctionDef', (1, 0, 1, 47), 'f', ('arguments', [], [('arg', (1, 6, 1, 22), 'g', ('CallableType', (1, 9, 1, 22), ('ArgumentsList', [('Name', (1, 10, 1, 13), 'int', ('Load',))]), ('Name', (1, 18, 1, 22), 'bool', ('Load',))), None), ('arg', (1, 24, 1, 40), 'h', ('CallableType', (1, 27, 1, 40), ('AnyArguments',), ('Name', (1, 36, 1, 40), 'bool', ('Load',))), None)], None, [], [], None, []), [('Pass', (1, 43, 1, 47))], [], None, None)], []),
+('Module', [('FunctionDef', (1, 0, 1, 40), 'f', ('arguments', [], [('arg', (1, 6, 1, 33), 'g', ('AsyncCallableType', (1, 9, 1, 33), ('Concatenation', [('Name', (1, 16, 1, 19), 'int', ('Load',))], ('Name', (1, 23, 1, 24), 'P', ('Load',))), ('Name', (1, 29, 1, 33), 'bool', ('Load',))), None)], None, [], [], None, []), [('Pass', (1, 36, 1, 40))], [], None, None)], []),
+('Module', [('FunctionDef', (1, 0, 1, 35), 'f', ('arguments', [], [], None, [], [], None, []), [('Pass', (1, 31, 1, 35))], [], ('CallableType', (1, 11, 1, 29), ('ArgumentsList', [('Name', (1, 12, 1, 15), 'int', ('Load',)), ('Name', (1, 17, 1, 20), 'str', ('Load',))]), ('Name', (1, 25, 1, 29), 'bool', ('Load',))), None)], []),
+('Module', [('FunctionDef', (1, 0, 1, 39), 'f', ('arguments', [], [], None, [], [], None, []), [('Pass', (1, 35, 1, 39))], [], ('CallableType', (1, 11, 1, 33), ('ArgumentsList', [('Name', (1, 12, 1, 15), 'int', ('Load',))]), ('CallableType', (1, 20, 1, 33), ('ArgumentsList', [('Name', (1, 21, 1, 24), 'str', ('Load',))]), ('Name', (1, 29, 1, 33), 'bool', ('Load',)))), None)], []),
+('Module', [('FunctionDef', (1, 0, 1, 41), 'f', ('arguments', [], [], None, [], [], None, []), [('Pass', (1, 37, 1, 41))], [], ('AsyncCallableType', (1, 11, 1, 35), ('ArgumentsList', [('Name', (1, 18, 1, 21), 'int', ('Load',)), ('Name', (1, 23, 1, 26), 'str', ('Load',))]), ('Name', (1, 31, 1, 35), 'bool', ('Load',))), None)], []),
+('Module', [('FunctionDef', (1, 0, 1, 51), 'f', ('arguments', [], [], None, [], [], None, []), [('Pass', (1, 47, 1, 51))], [], ('AsyncCallableType', (1, 11, 1, 45), ('ArgumentsList', [('Name', (1, 18, 1, 21), 'int', ('Load',))]), ('AsyncCallableType', (1, 26, 1, 45), ('ArgumentsList', [('Name', (1, 33, 1, 36), 'str', ('Load',))]), ('Name', (1, 41, 1, 45), 'bool', ('Load',)))), None)], []),
 ]
 callable_type_eval_results = [
 ('Expression', ('CallableType', (1, 0, 1, 13), ('AnyArguments',), ('Name', (1, 9, 1, 13), 'bool', ('Load',)))),
