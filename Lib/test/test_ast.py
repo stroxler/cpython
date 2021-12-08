@@ -245,7 +245,7 @@ eval_tests = [
 
 ]
 # TODO: move these into `eval_tests` once runtime behavior is implemented
-callable_syntax_tests = [
+callable_type_eval_tests = [
     # AnyArguments
     "(...) -> bool",
     # Empty ArgumentsList
@@ -338,7 +338,7 @@ class AST_Tests(unittest.TestCase):
         # we should move the snippets into `exec_tests`, regenerate outputs,
         # and clean up the `-g` logic.
         for input, output, kind in (
-                (callable_syntax_tests, callable_syntax_results, "exec"),
+                (callable_type_eval_tests, callable_type_eval_results, "eval"),
         ):
             for i, o in zip(input, output):
                 with self.subTest(action="parsing", input=i):
@@ -2308,10 +2308,11 @@ def main():
         return
     if sys.argv[1:] == ['-g']:
         for statements, kind in ((exec_tests, "exec"), (single_tests, "single"),
-                                 (eval_tests, "eval"), (callable_syntax_tests, "callable_syntax")):
+                                 (eval_tests, "eval"),
+                                 (callable_type_eval_tests, "callable_type_eval")):
             print(kind+"_results = [")
             for statement in statements:
-                tree = ast.parse(statement, "?", "eval" if kind == "callable_syntax" else kind)
+                tree = ast.parse(statement, "?", kind.removeprefix("callable_type_"))
                 print("%r," % (to_tuple(tree),))
             print("]")
         print("main()")
@@ -2427,5 +2428,15 @@ eval_results = [
 ('Expression', ('Tuple', (1, 0, 1, 7), [('Constant', (1, 1, 1, 2), 1, None), ('Constant', (1, 3, 1, 4), 2, None), ('Constant', (1, 5, 1, 6), 3, None)], ('Load',))),
 ('Expression', ('Tuple', (1, 0, 1, 2), [], ('Load',))),
 ('Expression', ('Call', (1, 0, 1, 17), ('Attribute', (1, 0, 1, 7), ('Attribute', (1, 0, 1, 5), ('Attribute', (1, 0, 1, 3), ('Name', (1, 0, 1, 1), 'a', ('Load',)), 'b', ('Load',)), 'c', ('Load',)), 'd', ('Load',)), [('Subscript', (1, 8, 1, 16), ('Attribute', (1, 8, 1, 11), ('Name', (1, 8, 1, 9), 'a', ('Load',)), 'b', ('Load',)), ('Slice', (1, 12, 1, 15), ('Constant', (1, 12, 1, 13), 1, None), ('Constant', (1, 14, 1, 15), 2, None), None), ('Load',))], [])),
+]
+callable_type_eval_results = [
+('Expression', ('CallableType', (1, 0, 1, 13), ('AnyArguments',), ('Name', (1, 9, 1, 13), 'bool', ('Load',)))),
+('Expression', ('CallableType', (1, 0, 1, 10), ('ArgumentsList', []), ('Name', (1, 6, 1, 10), 'bool', ('Load',)))),
+('Expression', ('CallableType', (1, 0, 1, 26), ('ArgumentsList', [('Name', (1, 1, 1, 4), 'int', ('Load',)), ('BinOp', (1, 6, 1, 17), ('Name', (1, 6, 1, 9), 'str', ('Load',)), ('BitOr',), ('Name', (1, 12, 1, 17), 'float', ('Load',)))]), ('Name', (1, 22, 1, 26), 'bool', ('Load',)))),
+('Expression', ('CallableType', (1, 0, 1, 13), ('Concatenation', [], ('Name', (1, 3, 1, 4), 'P', ('Load',))), ('Name', (1, 9, 1, 13), 'bool', ('Load',)))),
+('Expression', ('CallableType', (1, 0, 1, 18), ('Concatenation', [('Name', (1, 1, 1, 4), 'int', ('Load',))], ('Name', (1, 8, 1, 9), 'P', ('Load',))), ('Name', (1, 14, 1, 18), 'bool', ('Load',)))),
+('Expression', ('CallableType', (1, 0, 1, 22), ('ArgumentsList', [('Name', (1, 1, 1, 4), 'int', ('Load',))]), ('CallableType', (1, 9, 1, 22), ('ArgumentsList', [('Name', (1, 10, 1, 13), 'str', ('Load',))]), ('Name', (1, 18, 1, 22), 'bool', ('Load',))))),
+('Expression', ('CallableType', (1, 0, 1, 19), ('ArgumentsList', [('Name', (1, 1, 1, 4), 'int', ('Load',))]), ('BinOp', (1, 9, 1, 19), ('Name', (1, 9, 1, 12), 'str', ('Load',)), ('BitOr',), ('Name', (1, 15, 1, 19), 'bool', ('Load',))))),
+('Expression', ('CallableType', (1, 0, 1, 36), ('ArgumentsList', [('Name', (1, 1, 1, 4), 'int', ('Load',))]), ('AsyncCallableType', (1, 9, 1, 36), ('ArgumentsList', [('Name', (1, 16, 1, 21), 'float', ('Load',))]), ('BinOp', (1, 26, 1, 36), ('Name', (1, 26, 1, 29), 'str', ('Load',)), ('BitOr',), ('Name', (1, 32, 1, 36), 'bool', ('Load',)))))),
 ]
 main()
