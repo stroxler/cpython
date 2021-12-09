@@ -1,10 +1,12 @@
 import ast
 import sys
 import unittest
+import textwrap
 
 """
 This module isn't intended to merge, we just want it here for a more
-readable verification of operator binding that we can use in a PEP draft.
+readable verification of examples that are specifically called out in
+our draft PEP.
 
 Run tests with:
 ./python Lib/test/test_callable_examples_for_pep.py
@@ -61,6 +63,16 @@ edge_case_examples = [
         "def f() -> async (int) -> async (str) -> bool: pass",
         "def f() -> (async (int) -> (async (str) -> bool)): pass",
     ),
+    "Splitting lines should work fine",
+    (
+        textwrap.dedent("""
+        (
+            (int, bool) -> str,
+            list[dict[str, int]],
+        ) -> async (int, bool) -> str
+        """),
+        "((int, bool) -> str, list[dict[str, int]]) -> async (int, bool) -> str",
+    )
 ]
 
 
