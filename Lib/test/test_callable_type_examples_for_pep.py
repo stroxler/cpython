@@ -15,7 +15,7 @@ Print out a snippet to paste into the PEP's rst with:
 
 
 edge_case_examples = [
-    "# Trailing commas are permitted after positional args and ParamSpecs",
+    "Trailing commas are permitted except in empty args lists",
     (
         "(int,) -> bool",
         "(int) -> bool",
@@ -24,14 +24,18 @@ edge_case_examples = [
         "(int, **P,) -> bool",
         "(int, **P) -> bool",
     ),
-    "#-> binds less tightly than other operators, both inside types and\n"
-    "# in function signatures.",
+    (
+        "(...,) -> bool",
+        "(...) -> bool",
+    ),
+    "``->`` binds less tightly than other operators, both inside types and"
+    "in function signatures",
     (
         "(int) -> str | bool",
         "(int) -> (str | bool)",
     ),
-    "# `->` associates to the right, both inside types and\n"
-    "# in function signatures",
+    "``->`` associates to the right, both inside types and"
+    "in function signatures",
     (
         "(int) -> (str) -> bool",
         "(int) -> ((str) -> bool)",
@@ -44,7 +48,7 @@ edge_case_examples = [
         "def f() -> (int) -> (str) -> bool: pass",
         "def f() -> ((int) -> ((str) -> bool)): pass",
     ),
-    "# All of the binding rules still work for async callable types",
+    "All of the binding rules still work for async callable types",
     (
         "(int) -> async (float) -> str | bool",
         "(int) -> (async (float) -> (str | bool))",
@@ -79,9 +83,7 @@ if __name__ == "__main__":
         for entry in edge_case_examples:
             is_comment = isinstance(entry, str)
             if is_comment:
-                lines = entry.split("\n")
-                for line in lines:
-                    print(indent + line)
+                print(entry + "::\n")
             else:
                 try:
                     implicit_code, explicit_code = entry
@@ -92,6 +94,3 @@ if __name__ == "__main__":
                 print()
     else:
         unittest.main()
-
-
-

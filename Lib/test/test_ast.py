@@ -262,6 +262,7 @@ eval_tests = [
 callable_type_eval_tests = [
     # AnyArguments
     "(...) -> bool",
+    "(...,) -> bool",
     # Empty ArgumentsList
     "() -> bool",
     # Nontrivial ArgumentsList. Trailing commas are legal.
@@ -386,11 +387,7 @@ class AST_Tests(unittest.TestCase):
                 # the fact that it represents AnyArguments in the existing
                 # syntax and due to the fact that it's often used to indicate
                 # default values in function signatures.
-                #
-                # A desirable side effect is that a trailing comma after ...
-                # is not legal.
                 "(int, ...) -> bool",
-                "(...,) -> bool",
         ]:
             self.assertRaises(SyntaxError, ast.parse, invalid_example)
 
@@ -2490,6 +2487,7 @@ callable_type_exec_results = [
 ]
 callable_type_eval_results = [
 ('Expression', ('CallableType', (1, 0, 1, 13), ('AnyArguments',), ('Name', (1, 9, 1, 13), 'bool', ('Load',)))),
+('Expression', ('CallableType', (1, 0, 1, 14), ('AnyArguments',), ('Name', (1, 10, 1, 14), 'bool', ('Load',)))),
 ('Expression', ('CallableType', (1, 0, 1, 10), ('ArgumentsList', []), ('Name', (1, 6, 1, 10), 'bool', ('Load',)))),
 ('Expression', ('CallableType', (1, 0, 1, 26), ('ArgumentsList', [('Name', (1, 1, 1, 4), 'int', ('Load',)), ('BinOp', (1, 6, 1, 17), ('Name', (1, 6, 1, 9), 'str', ('Load',)), ('BitOr',), ('Name', (1, 12, 1, 17), 'float', ('Load',)))]), ('Name', (1, 22, 1, 26), 'bool', ('Load',)))),
 ('Expression', ('CallableType', (1, 0, 1, 27), ('ArgumentsList', [('Name', (1, 1, 1, 4), 'int', ('Load',)), ('BinOp', (1, 6, 1, 17), ('Name', (1, 6, 1, 9), 'str', ('Load',)), ('BitOr',), ('Name', (1, 12, 1, 17), 'float', ('Load',)))]), ('Name', (1, 23, 1, 27), 'bool', ('Load',)))),

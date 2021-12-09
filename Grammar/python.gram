@@ -860,7 +860,7 @@ callable_type_expression:
        _PyAST_AsyncCallableType(a, r, EXTRA) }
 
 callable_type_arguments:
-    | '(' '...' ')' { _PyAST_AnyArguments(p->arena) }
+    | '(' '...' [','] ')' { _PyAST_AnyArguments(p->arena) }
     | '(' a[asdl_expr_seq*]=callable_type_positional_argument*  ')' {
         _PyAST_ArgumentsList(a, p->arena) }
     | '(' a[asdl_expr_seq*]=callable_type_positional_argument* ps=callable_type_param_spec ')' {

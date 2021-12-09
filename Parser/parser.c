@@ -14575,7 +14575,7 @@ callable_type_expression_rule(Parser *p)
 }
 
 // callable_type_arguments:
-//     | '(' '...' ')'
+//     | '(' '...' ','? ')'
 //     | '(' callable_type_positional_argument* ')'
 //     | '(' callable_type_positional_argument* callable_type_param_spec ')'
 static void *
@@ -14588,24 +14588,28 @@ callable_type_arguments_rule(Parser *p)
     }
     void * _res = NULL;
     int _mark = p->mark;
-    { // '(' '...' ')'
+    { // '(' '...' ','? ')'
         if (p->error_indicator) {
             D(p->level--);
             return NULL;
         }
-        D(fprintf(stderr, "%*c> callable_type_arguments[%d-%d]: %s\n", p->level, ' ', _mark, p->mark, "'(' '...' ')'"));
+        D(fprintf(stderr, "%*c> callable_type_arguments[%d-%d]: %s\n", p->level, ' ', _mark, p->mark, "'(' '...' ','? ')'"));
         Token * _literal;
         Token * _literal_1;
         Token * _literal_2;
+        void *_opt_var;
+        UNUSED(_opt_var); // Silence compiler warnings
         if (
             (_literal = _PyPegen_expect_token(p, 7))  // token='('
             &&
             (_literal_1 = _PyPegen_expect_token(p, 52))  // token='...'
             &&
+            (_opt_var = _PyPegen_expect_token(p, 12), !p->error_indicator)  // ','?
+            &&
             (_literal_2 = _PyPegen_expect_token(p, 8))  // token=')'
         )
         {
-            D(fprintf(stderr, "%*c+ callable_type_arguments[%d-%d]: %s succeeded!\n", p->level, ' ', _mark, p->mark, "'(' '...' ')'"));
+            D(fprintf(stderr, "%*c+ callable_type_arguments[%d-%d]: %s succeeded!\n", p->level, ' ', _mark, p->mark, "'(' '...' ','? ')'"));
             _res = _PyAST_AnyArguments ( p -> arena );
             if (_res == NULL && PyErr_Occurred()) {
                 p->error_indicator = 1;
@@ -14616,7 +14620,7 @@ callable_type_arguments_rule(Parser *p)
         }
         p->mark = _mark;
         D(fprintf(stderr, "%*c%s callable_type_arguments[%d-%d]: %s failed!\n", p->level, ' ',
-                  p->error_indicator ? "ERROR!" : "-", _mark, p->mark, "'(' '...' ')'"));
+                  p->error_indicator ? "ERROR!" : "-", _mark, p->mark, "'(' '...' ','? ')'"));
     }
     { // '(' callable_type_positional_argument* ')'
         if (p->error_indicator) {
