@@ -50,28 +50,15 @@ edge_case_examples = [
         "def f() -> (int) -> (str) -> bool: pass",
         "def f() -> ((int) -> ((str) -> bool)): pass",
     ),
-    "All of the binding rules still work for async callable types",
-    (
-        "(int) -> async (float) -> str | bool",
-        "(int) -> (async (float) -> (str | bool))",
-    ),
-    (
-        "def f() -> async (int, str) -> bool: pass",
-        "def f() -> (async (int, str) -> bool): pass",
-    ),
-    (
-        "def f() -> async (int) -> async (str) -> bool: pass",
-        "def f() -> (async (int) -> (async (str) -> bool)): pass",
-    ),
     "Splitting lines should work fine",
     (
         textwrap.dedent("""
         (
             (int, bool) -> str,
             list[dict[str, int]],
-        ) -> async (int, bool) -> str
+        ) -> (int, bool) -> str
         """),
-        "((int, bool) -> str, list[dict[str, int]]) -> async (int, bool) -> str",
+        "((int, bool) -> str, list[dict[str, int]]) -> (int, bool) -> str",
     )
 ]
 

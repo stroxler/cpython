@@ -36,7 +36,6 @@ void _PyAST_Fini(PyInterpreterState *interp)
     Py_CLEAR(state->ArgumentsList_type);
     Py_CLEAR(state->Assert_type);
     Py_CLEAR(state->Assign_type);
-    Py_CLEAR(state->AsyncCallableType_type);
     Py_CLEAR(state->AsyncFor_type);
     Py_CLEAR(state->AsyncFunctionDef_type);
     Py_CLEAR(state->AsyncWith_type);
@@ -604,10 +603,6 @@ static const char * const JoinedStr_fields[]={
 static const char * const Constant_fields[]={
     "value",
     "kind",
-};
-static const char * const AsyncCallableType_fields[]={
-    "args",
-    "returns",
 };
 static const char * const CallableType_fields[]={
     "args",
@@ -1342,7 +1337,6 @@ init_types(struct ast_state *state)
         "     | FormattedValue(expr value, int? conversion, expr? format_spec)\n"
         "     | JoinedStr(expr* values)\n"
         "     | Constant(constant value, string? kind)\n"
-        "     | AsyncCallableType(callable_type_arguments args, expr returns)\n"
         "     | CallableType(callable_type_arguments args, expr returns)\n"
         "     | Attribute(expr value, identifier attr, expr_context ctx)\n"
         "     | Subscript(expr value, expr slice, expr_context ctx)\n"
@@ -1449,11 +1443,6 @@ init_types(struct ast_state *state)
     if (!state->Constant_type) return 0;
     if (PyObject_SetAttr(state->Constant_type, state->kind, Py_None) == -1)
         return 0;
-    state->AsyncCallableType_type = make_type(state, "AsyncCallableType",
-                                              state->expr_type,
-                                              AsyncCallableType_fields, 2,
-        "AsyncCallableType(callable_type_arguments args, expr returns)");
-    if (!state->AsyncCallableType_type) return 0;
     state->CallableType_type = make_type(state, "CallableType",
                                          state->expr_type, CallableType_fields,
                                          2,
@@ -3098,35 +3087,6 @@ _PyAST_Constant(constant value, string kind, int lineno, int col_offset, int
 }
 
 expr_ty
-_PyAST_AsyncCallableType(callable_type_arguments_ty args, expr_ty returns, int
-                         lineno, int col_offset, int end_lineno, int
-                         end_col_offset, PyArena *arena)
-{
-    expr_ty p;
-    if (!args) {
-        PyErr_SetString(PyExc_ValueError,
-                        "field 'args' is required for AsyncCallableType");
-        return NULL;
-    }
-    if (!returns) {
-        PyErr_SetString(PyExc_ValueError,
-                        "field 'returns' is required for AsyncCallableType");
-        return NULL;
-    }
-    p = (expr_ty)_PyArena_Malloc(arena, sizeof(*p));
-    if (!p)
-        return NULL;
-    p->kind = AsyncCallableType_kind;
-    p->v.AsyncCallableType.args = args;
-    p->v.AsyncCallableType.returns = returns;
-    p->lineno = lineno;
-    p->col_offset = col_offset;
-    p->end_lineno = end_lineno;
-    p->end_col_offset = end_col_offset;
-    return p;
-}
-
-expr_ty
 _PyAST_CallableType(callable_type_arguments_ty args, expr_ty returns, int
                     lineno, int col_offset, int end_lineno, int end_col_offset,
                     PyArena *arena)
@@ -4663,21 +4623,6 @@ ast2obj_expr(struct ast_state *state, void* _o)
         value = ast2obj_string(state, o->v.Constant.kind);
         if (!value) goto failed;
         if (PyObject_SetAttr(result, state->kind, value) == -1)
-            goto failed;
-        Py_DECREF(value);
-        break;
-    case AsyncCallableType_kind:
-        tp = (PyTypeObject *)state->AsyncCallableType_type;
-        result = PyType_GenericNew(tp, NULL, NULL);
-        if (!result) goto failed;
-        value = ast2obj_callable_type_arguments(state, o->v.AsyncCallableType.args);
-        if (!value) goto failed;
-        if (PyObject_SetAttr(result, state->args, value) == -1)
-            goto failed;
-        Py_DECREF(value);
-        value = ast2obj_expr(state, o->v.AsyncCallableType.returns);
-        if (!value) goto failed;
-        if (PyObject_SetAttr(result, state->returns, value) == -1)
             goto failed;
         Py_DECREF(value);
         break;
@@ -9404,54 +9349,6 @@ obj2ast_expr(struct ast_state *state, PyObject* obj, expr_ty* out, PyArena*
         if (*out == NULL) goto failed;
         return 0;
     }
-    tp = state->AsyncCallableType_type;
-    isinstance = PyObject_IsInstance(obj, tp);
-    if (isinstance == -1) {
-        return 1;
-    }
-    if (isinstance) {
-        callable_type_arguments_ty args;
-        expr_ty returns;
-
-        if (_PyObject_LookupAttr(obj, state->args, &tmp) < 0) {
-            return 1;
-        }
-        if (tmp == NULL) {
-            PyErr_SetString(PyExc_TypeError, "required field \"args\" missing from AsyncCallableType");
-            return 1;
-        }
-        else {
-            int res;
-            if (Py_EnterRecursiveCall(" while traversing 'AsyncCallableType' node")) {
-                goto failed;
-            }
-            res = obj2ast_callable_type_arguments(state, tmp, &args, arena);
-            Py_LeaveRecursiveCall();
-            if (res != 0) goto failed;
-            Py_CLEAR(tmp);
-        }
-        if (_PyObject_LookupAttr(obj, state->returns, &tmp) < 0) {
-            return 1;
-        }
-        if (tmp == NULL) {
-            PyErr_SetString(PyExc_TypeError, "required field \"returns\" missing from AsyncCallableType");
-            return 1;
-        }
-        else {
-            int res;
-            if (Py_EnterRecursiveCall(" while traversing 'AsyncCallableType' node")) {
-                goto failed;
-            }
-            res = obj2ast_expr(state, tmp, &returns, arena);
-            Py_LeaveRecursiveCall();
-            if (res != 0) goto failed;
-            Py_CLEAR(tmp);
-        }
-        *out = _PyAST_AsyncCallableType(args, returns, lineno, col_offset,
-                                        end_lineno, end_col_offset, arena);
-        if (*out == NULL) goto failed;
-        return 0;
-    }
     tp = state->CallableType_type;
     isinstance = PyObject_IsInstance(obj, tp);
     if (isinstance == -1) {
@@ -12266,10 +12163,6 @@ astmodule_exec(PyObject *m)
         return -1;
     }
     if (PyModule_AddObjectRef(m, "Constant", state->Constant_type) < 0) {
-        return -1;
-    }
-    if (PyModule_AddObjectRef(m, "AsyncCallableType",
-        state->AsyncCallableType_type) < 0) {
         return -1;
     }
     if (PyModule_AddObjectRef(m, "CallableType", state->CallableType_type) < 0)

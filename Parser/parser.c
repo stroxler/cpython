@@ -14465,9 +14465,7 @@ lambda_param_rule(Parser *p)
     return _res;
 }
 
-// callable_type_expression:
-//     | callable_type_arguments '->' expression
-//     | ASYNC callable_type_arguments '->' expression
+// callable_type_expression: callable_type_arguments '->' expression
 static void *
 callable_type_expression_rule(Parser *p)
 {
@@ -14525,48 +14523,6 @@ callable_type_expression_rule(Parser *p)
         p->mark = _mark;
         D(fprintf(stderr, "%*c%s callable_type_expression[%d-%d]: %s failed!\n", p->level, ' ',
                   p->error_indicator ? "ERROR!" : "-", _mark, p->mark, "callable_type_arguments '->' expression"));
-    }
-    { // ASYNC callable_type_arguments '->' expression
-        if (p->error_indicator) {
-            D(p->level--);
-            return NULL;
-        }
-        D(fprintf(stderr, "%*c> callable_type_expression[%d-%d]: %s\n", p->level, ' ', _mark, p->mark, "ASYNC callable_type_arguments '->' expression"));
-        Token * _literal;
-        void *a;
-        Token * async_var;
-        expr_ty r;
-        if (
-            (async_var = _PyPegen_expect_token(p, ASYNC))  // token='ASYNC'
-            &&
-            (a = callable_type_arguments_rule(p))  // callable_type_arguments
-            &&
-            (_literal = _PyPegen_expect_token(p, 51))  // token='->'
-            &&
-            (r = expression_rule(p))  // expression
-        )
-        {
-            D(fprintf(stderr, "%*c+ callable_type_expression[%d-%d]: %s succeeded!\n", p->level, ' ', _mark, p->mark, "ASYNC callable_type_arguments '->' expression"));
-            Token *_token = _PyPegen_get_last_nonnwhitespace_token(p);
-            if (_token == NULL) {
-                D(p->level--);
-                return NULL;
-            }
-            int _end_lineno = _token->end_lineno;
-            UNUSED(_end_lineno); // Only used by EXTRA macro
-            int _end_col_offset = _token->end_col_offset;
-            UNUSED(_end_col_offset); // Only used by EXTRA macro
-            _res = _PyAST_AsyncCallableType ( a , r , EXTRA );
-            if (_res == NULL && PyErr_Occurred()) {
-                p->error_indicator = 1;
-                D(p->level--);
-                return NULL;
-            }
-            goto done;
-        }
-        p->mark = _mark;
-        D(fprintf(stderr, "%*c%s callable_type_expression[%d-%d]: %s failed!\n", p->level, ' ',
-                  p->error_indicator ? "ERROR!" : "-", _mark, p->mark, "ASYNC callable_type_arguments '->' expression"));
     }
     _res = NULL;
   done:

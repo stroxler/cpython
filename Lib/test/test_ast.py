@@ -166,16 +166,11 @@ exec_tests = [
 callable_type_exec_tests = [
     # Callable types in argument positions
     "def f(g: (int) -> bool, h: (...) -> bool): pass",
-    "def f(g: async (int, **P) -> bool): pass",
     # Callable types in return positions
     "def f() -> (int, str) -> bool: pass",
     "def f() -> (int) -> (str) -> bool: pass",
-    # Async callable types in the return position
-    "def f() -> async (int, str) -> bool: pass",
-    "def f() -> async (int) -> async (str) -> bool: pass",
     # Cases requiring explicit parentheses
     "def f() -> (int) -> bool | (() -> bool): pass",
-    "def f() -> async (int) -> bool | (async () -> bool): pass",
 ]
 
 # These are compiled through "single"
@@ -277,8 +272,6 @@ callable_type_eval_tests = [
     "(int) -> (str) -> bool",
     # Right-associativity of -> and | (so that | binds in return position)
     "(int) -> str | bool",
-    # async, including how it behaves in return position
-    "(int) -> async (float) -> str | bool",
     # To use a callable type as part of a | requires parentheses
     "bool | (() -> bool)",
     # Other operators don't currenty carry semantic meaning when applied to
@@ -2477,13 +2470,9 @@ eval_results = [
 ]
 callable_type_exec_results = [
 ('Module', [('FunctionDef', (1, 0, 1, 47), 'f', ('arguments', [], [('arg', (1, 6, 1, 22), 'g', ('CallableType', (1, 9, 1, 22), ('ArgumentsList', [('Name', (1, 10, 1, 13), 'int', ('Load',))]), ('Name', (1, 18, 1, 22), 'bool', ('Load',))), None), ('arg', (1, 24, 1, 40), 'h', ('CallableType', (1, 27, 1, 40), ('AnyArguments',), ('Name', (1, 36, 1, 40), 'bool', ('Load',))), None)], None, [], [], None, []), [('Pass', (1, 43, 1, 47))], [], None, None)], []),
-('Module', [('FunctionDef', (1, 0, 1, 40), 'f', ('arguments', [], [('arg', (1, 6, 1, 33), 'g', ('AsyncCallableType', (1, 9, 1, 33), ('Concatenation', [('Name', (1, 16, 1, 19), 'int', ('Load',))], ('Name', (1, 23, 1, 24), 'P', ('Load',))), ('Name', (1, 29, 1, 33), 'bool', ('Load',))), None)], None, [], [], None, []), [('Pass', (1, 36, 1, 40))], [], None, None)], []),
 ('Module', [('FunctionDef', (1, 0, 1, 35), 'f', ('arguments', [], [], None, [], [], None, []), [('Pass', (1, 31, 1, 35))], [], ('CallableType', (1, 11, 1, 29), ('ArgumentsList', [('Name', (1, 12, 1, 15), 'int', ('Load',)), ('Name', (1, 17, 1, 20), 'str', ('Load',))]), ('Name', (1, 25, 1, 29), 'bool', ('Load',))), None)], []),
 ('Module', [('FunctionDef', (1, 0, 1, 39), 'f', ('arguments', [], [], None, [], [], None, []), [('Pass', (1, 35, 1, 39))], [], ('CallableType', (1, 11, 1, 33), ('ArgumentsList', [('Name', (1, 12, 1, 15), 'int', ('Load',))]), ('CallableType', (1, 20, 1, 33), ('ArgumentsList', [('Name', (1, 21, 1, 24), 'str', ('Load',))]), ('Name', (1, 29, 1, 33), 'bool', ('Load',)))), None)], []),
-('Module', [('FunctionDef', (1, 0, 1, 41), 'f', ('arguments', [], [], None, [], [], None, []), [('Pass', (1, 37, 1, 41))], [], ('AsyncCallableType', (1, 11, 1, 35), ('ArgumentsList', [('Name', (1, 18, 1, 21), 'int', ('Load',)), ('Name', (1, 23, 1, 26), 'str', ('Load',))]), ('Name', (1, 31, 1, 35), 'bool', ('Load',))), None)], []),
-('Module', [('FunctionDef', (1, 0, 1, 51), 'f', ('arguments', [], [], None, [], [], None, []), [('Pass', (1, 47, 1, 51))], [], ('AsyncCallableType', (1, 11, 1, 45), ('ArgumentsList', [('Name', (1, 18, 1, 21), 'int', ('Load',))]), ('AsyncCallableType', (1, 26, 1, 45), ('ArgumentsList', [('Name', (1, 33, 1, 36), 'str', ('Load',))]), ('Name', (1, 41, 1, 45), 'bool', ('Load',)))), None)], []),
 ('Module', [('FunctionDef', (1, 0, 1, 45), 'f', ('arguments', [], [], None, [], [], None, []), [('Pass', (1, 41, 1, 45))], [], ('CallableType', (1, 11, 1, 39), ('ArgumentsList', [('Name', (1, 12, 1, 15), 'int', ('Load',))]), ('BinOp', (1, 20, 1, 39), ('Name', (1, 20, 1, 24), 'bool', ('Load',)), ('BitOr',), ('CallableType', (1, 28, 1, 38), ('ArgumentsList', []), ('Name', (1, 34, 1, 38), 'bool', ('Load',))))), None)], []),
-('Module', [('FunctionDef', (1, 0, 1, 57), 'f', ('arguments', [], [], None, [], [], None, []), [('Pass', (1, 53, 1, 57))], [], ('AsyncCallableType', (1, 11, 1, 51), ('ArgumentsList', [('Name', (1, 18, 1, 21), 'int', ('Load',))]), ('BinOp', (1, 26, 1, 51), ('Name', (1, 26, 1, 30), 'bool', ('Load',)), ('BitOr',), ('AsyncCallableType', (1, 34, 1, 50), ('ArgumentsList', []), ('Name', (1, 46, 1, 50), 'bool', ('Load',))))), None)], []),
 ]
 callable_type_eval_results = [
 ('Expression', ('CallableType', (1, 0, 1, 13), ('AnyArguments',), ('Name', (1, 9, 1, 13), 'bool', ('Load',)))),
@@ -2496,7 +2485,6 @@ callable_type_eval_results = [
 ('Expression', ('CallableType', (1, 0, 1, 18), ('Concatenation', [('Name', (1, 1, 1, 4), 'int', ('Load',))], ('Name', (1, 8, 1, 9), 'P', ('Load',))), ('Name', (1, 14, 1, 18), 'bool', ('Load',)))),
 ('Expression', ('CallableType', (1, 0, 1, 22), ('ArgumentsList', [('Name', (1, 1, 1, 4), 'int', ('Load',))]), ('CallableType', (1, 9, 1, 22), ('ArgumentsList', [('Name', (1, 10, 1, 13), 'str', ('Load',))]), ('Name', (1, 18, 1, 22), 'bool', ('Load',))))),
 ('Expression', ('CallableType', (1, 0, 1, 19), ('ArgumentsList', [('Name', (1, 1, 1, 4), 'int', ('Load',))]), ('BinOp', (1, 9, 1, 19), ('Name', (1, 9, 1, 12), 'str', ('Load',)), ('BitOr',), ('Name', (1, 15, 1, 19), 'bool', ('Load',))))),
-('Expression', ('CallableType', (1, 0, 1, 36), ('ArgumentsList', [('Name', (1, 1, 1, 4), 'int', ('Load',))]), ('AsyncCallableType', (1, 9, 1, 36), ('ArgumentsList', [('Name', (1, 16, 1, 21), 'float', ('Load',))]), ('BinOp', (1, 26, 1, 36), ('Name', (1, 26, 1, 29), 'str', ('Load',)), ('BitOr',), ('Name', (1, 32, 1, 36), 'bool', ('Load',)))))),
 ('Expression', ('BinOp', (1, 0, 1, 19), ('Name', (1, 0, 1, 4), 'bool', ('Load',)), ('BitOr',), ('CallableType', (1, 8, 1, 18), ('ArgumentsList', []), ('Name', (1, 14, 1, 18), 'bool', ('Load',))))),
 ('Expression', ('BinOp', (1, 0, 1, 19), ('Name', (1, 0, 1, 4), 'bool', ('Load',)), ('BitOr',), ('CallableType', (1, 8, 1, 18), ('ArgumentsList', []), ('Name', (1, 14, 1, 18), 'bool', ('Load',))))),
 ('Expression', ('BinOp', (1, 0, 1, 19), ('Name', (1, 0, 1, 4), 'bool', ('Load',)), ('Mult',), ('CallableType', (1, 8, 1, 18), ('ArgumentsList', []), ('Name', (1, 14, 1, 18), 'bool', ('Load',))))),

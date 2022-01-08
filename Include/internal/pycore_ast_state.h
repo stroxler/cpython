@@ -22,7 +22,6 @@ struct ast_state {
     PyObject *ArgumentsList_type;
     PyObject *Assert_type;
     PyObject *Assign_type;
-    PyObject *AsyncCallableType_type;
     PyObject *AsyncFor_type;
     PyObject *AsyncFunctionDef_type;
     PyObject *AsyncWith_type;

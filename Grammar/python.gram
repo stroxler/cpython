@@ -856,8 +856,6 @@ lambda_param[arg_ty]: a=NAME { _PyAST_arg(a->v.Name.id, NULL, NULL, EXTRA) }
 callable_type_expression:
     | a=callable_type_arguments '->' r=expression {
       _PyAST_CallableType(a, r, EXTRA) }
-    | ASYNC a=callable_type_arguments '->' r=expression {
-       _PyAST_AsyncCallableType(a, r, EXTRA) }
 
 callable_type_arguments:
     | '(' '...' [','] ')' { _PyAST_AnyArguments(p->arena) }
